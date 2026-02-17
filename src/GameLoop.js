@@ -1,10 +1,13 @@
 const Player = require('./Player');
+const World = require('./World');
+const Constants = require('./Constants');
 
 class GameLoop {
     constructor() {
         this.players = {};
+        this.playerInputs = {}; // Store input for processing in tick
         this.interval = null;
-        this.TICK_RATE = 20; // 20 ticks per second
+        this.TICK_RATE = Constants.TICK_RATE;
         this.TICK_TIME = 1000 / this.TICK_RATE;
     }
 
@@ -26,7 +29,13 @@ class GameLoop {
 
     update() {
         for (const id in this.players) {
-            this.players[id].move();
+            const player = this.players[id];
+            const input = this.playerInputs[id];
+
+            if (input) {
+                player.handleInput(input, World);
+                this.playerInputs[id] = null; // Consume input
+            }
         }
     }
 
@@ -42,8 +51,17 @@ class GameLoop {
     removePlayer(id) {
         if (this.players[id]) {
             delete this.players[id];
+            delete this.playerInputs[id];
             console.log(`Player ${id} removed`);
         }
+    }
+
+    handlePlayerInput(id, input) {
+        this.playerInputs[id] = input;
+    }
+
+    getWorldBlocks() {
+        return World.blocks;
     }
 }
 

@@ -15,8 +15,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
+    // Send world data to the new player
+    socket.emit('world', gameLoop.getWorldBlocks());
+
     // Add new player to the game loop
     gameLoop.addPlayer(socket.id);
+
+    // Handle movement input
+    socket.on('move', (inputVector) => {
+        gameLoop.handlePlayerInput(socket.id, inputVector);
+    });
 
     // Handle disconnection
     socket.on('disconnect', () => {
