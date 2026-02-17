@@ -51,20 +51,38 @@ class GameLoop {
         // Update Players
         for (const id in this.players) {
             const player = this.players[id];
-            const input = this.playerInputs[id];
 
+            // Handle Respawn
+            if (player.dead) {
+                 if (player.respawn()) {
+                     // Just respawned
+                 }
+                 continue; // Don't process input if dead
+            }
+
+            const input = this.playerInputs[id];
             if (input) {
                 player.handleInput(input, World);
                 this.playerInputs[id] = null; // Consume input
             }
         }
 
-        // Update Mobs (Respawn logic)
+        // Update Mobs (AI & Respawn)
         for (const id in this.mobs) {
             const mob = this.mobs[id];
+
             if (mob.dead) {
                 if (Date.now() > mob.respawnTimer) {
                     mob.respawn();
+                }
+            } else {
+                // AI Update
+                const action = mob.update(this.players, World);
+                if (action && action.type === 'attack') {
+                     // Player took damage, logic handled inside mob.update calling player.takeDamage
+                     // But we might want to broadcast damage effect
+                     // Although floating text on player is usually for damage dealt, let's keep it simple.
+                     // Maybe flash screen red on client?
                 }
             }
         }

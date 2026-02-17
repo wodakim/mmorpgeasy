@@ -14,7 +14,12 @@ const Constants = {
     XP_BASE: 100,
     XP_FACTOR: 1.5,
     MOB_XP: 20,
-    MOB_RESPAWN_TIME: 5000 // 5 seconds
+    MOB_RESPAWN_TIME: 5000, // 5 seconds
+    MOB_SPEED: 3, // Units per second
+    MOB_DAMAGE: 5,
+    MOB_ATTACK_RANGE: 1.5,
+    MOB_AGGRO_RANGE: 10,
+    MOB_ATTACK_COOLDOWN: 1000 // 1 second
 };
 
 module.exports = Constants;

@@ -17,6 +17,30 @@ class Player {
         this.level = 1;
         this.xp = 0;
         this.maxXp = 100;
+        this.dead = false;
+        this.respawnTimer = 0;
+    }
+
+    takeDamage(amount) {
+        if (this.dead) return;
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.hp = 0;
+            this.dead = true;
+            this.respawnTimer = Date.now() + 3000; // 3 seconds to respawn
+        }
+    }
+
+    respawn() {
+        if (this.dead && Date.now() > this.respawnTimer) {
+            this.dead = false;
+            this.hp = this.maxHp;
+            this.mana = this.maxMana;
+            this.x = 0;
+            this.z = 0;
+            return true;
+        }
+        return false;
     }
 
     gainXp(amount) {
@@ -38,6 +62,7 @@ class Player {
     }
 
     handleInput(inputVector, world) {
+        if (this.dead) return; // Dead players can't move
         if (!inputVector || (inputVector.x === 0 && inputVector.z === 0)) return;
 
         // Normalize input vector

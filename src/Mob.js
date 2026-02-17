@@ -12,6 +12,50 @@ class Mob {
         this.respawnTimer = 0;
         this.originalX = x; // For respawning
         this.originalZ = z;
+        this.lastAttackTime = 0;
+    }
+
+    update(players, world) {
+        if (this.dead) return;
+
+        // Find closest player
+        let target = null;
+        let minDist = Constants.MOB_AGGRO_RANGE;
+
+        for (const id in players) {
+            const p = players[id];
+            if (p.dead) continue; // Ignore dead players
+
+            const dist = Math.sqrt((this.x - p.x)**2 + (this.z - p.z)**2);
+            if (dist < minDist) {
+                minDist = dist;
+                target = p;
+            }
+        }
+
+        if (target) {
+            // Chase
+            if (minDist > Constants.MOB_ATTACK_RANGE - 0.5) { // Stop slightly before hitting
+                const dx = target.x - this.x;
+                const dz = target.z - this.z;
+                const len = Math.sqrt(dx*dx + dz*dz);
+
+                // Move towards target
+                const speed = Constants.MOB_SPEED / Constants.TICK_RATE; // Speed per tick
+                this.x += (dx / len) * speed;
+                this.z += (dz / len) * speed;
+            }
+
+            // Attack
+            if (minDist < Constants.MOB_ATTACK_RANGE) {
+                if (Date.now() - this.lastAttackTime > Constants.MOB_ATTACK_COOLDOWN) {
+                    target.takeDamage(Constants.MOB_DAMAGE);
+                    this.lastAttackTime = Date.now();
+                    return { type: 'attack', targetId: target.id, damage: Constants.MOB_DAMAGE };
+                }
+            }
+        }
+        return null;
     }
 
     takeDamage(amount) {

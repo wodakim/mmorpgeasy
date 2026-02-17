@@ -48,6 +48,7 @@ const PLAYER_SPEED_PER_SEC = 4; // Should match server units/sec (0.2 * 20)
 // Input State
 const keys = {
     w: false, a: false, s: false, d: false,
+    z: false, q: false, // AZERTY support
     ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
 };
 
@@ -59,11 +60,19 @@ const chatInput = document.getElementById('chat-input');
 const chatLog = document.getElementById('chat-log');
 const actionBar = document.getElementById('action-bar-container');
 const floatingTextContainer = document.getElementById('floating-text-container');
+const joystickContainer = document.getElementById('joystick-container');
+const joystickKnob = document.getElementById('joystick-knob');
+const actionButton = document.getElementById('action-button');
+const deathScreen = document.getElementById('death-screen');
 
 // Mobs & Combat State
 const mobs = {}; // { id: { mesh: THREE.Mesh, hp: number, maxHp: number } }
 let currentTargetId = null;
 let targetRing = null;
+
+// Joystick State
+let joystickActive = false;
+let joystickVector = { x: 0, y: 0 }; // Normalized -1 to 1
 
 // Raycaster for targeting
 const raycaster = new THREE.Raycaster();
@@ -215,6 +224,12 @@ socket.on('state', (state) => {
         if (id === myId) {
             updateStatsUI(p);
             updateInterface(p.level); // Progressive disclosure
+            handleDeathState(p.dead);
+        }
+
+        // Handle visual death state for everyone
+        if (players[id]) {
+             updatePlayerVisuals(players[id], p.dead, p.color);
         }
 
         if (!players[id]) {
@@ -226,7 +241,8 @@ socket.on('state', (state) => {
             // Store mesh and target position
             players[id] = {
                 mesh: mesh,
-                targetPosition: new THREE.Vector3(p.x, 0, p.z)
+                targetPosition: new THREE.Vector3(p.x, 0, p.z),
+                originalColor: p.color // Store original color for respawn
             };
         } else {
             // Update target position
@@ -326,6 +342,43 @@ function updateInterface(level) {
     }
 }
 
+let isDead = false;
+function handleDeathState(dead) {
+    // Only handles UI overlay for local player
+    if (dead && !isDead) {
+        isDead = true;
+        deathScreen.style.display = 'flex';
+    } else if (!dead && isDead) {
+        isDead = false;
+        deathScreen.style.display = 'none';
+    }
+}
+
+function updatePlayerVisuals(playerObj, isDead, originalColor) {
+    const mesh = playerObj.mesh;
+    if (!mesh) return;
+
+    if (isDead) {
+        // Apply dead visuals if not already applied
+        if (mesh.rotation.z !== Math.PI / 2) {
+            mesh.rotation.z = Math.PI / 2;
+            mesh.traverse(child => {
+                if (child.isMesh) child.material.color.setHex(0x555555);
+            });
+        }
+    } else {
+        // Apply alive visuals if needed
+        if (mesh.rotation.z !== 0) {
+            mesh.rotation.z = 0;
+            // Restore colors
+            if (mesh.children[0]) mesh.children[0].material.color.setHex(originalColor);
+            if (mesh.children[1]) mesh.children[1].material.color.setHex(0xffccaa);
+            if (mesh.children[2]) mesh.children[2].material.color.setHex(0x000000);
+            if (mesh.children[3]) mesh.children[3].material.color.setHex(0x000000);
+        }
+    }
+}
+
 // Input Handling
 window.addEventListener('keydown', (e) => {
     // Chat Toggle Logic
@@ -358,6 +411,82 @@ window.addEventListener('keyup', (e) => {
         keys[e.key] = false;
     }
 });
+
+// --- Touch Controls ---
+
+// Joystick
+joystickContainer.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    joystickActive = true;
+    updateJoystick(e.changedTouches[0]);
+}, { passive: false });
+
+joystickContainer.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (joystickActive) {
+        // Find the touch associated with the joystick if multiple
+        // Assuming first touch in container is joystick for simplicity
+        updateJoystick(e.changedTouches[0]);
+    }
+}, { passive: false });
+
+joystickContainer.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    joystickActive = false;
+    joystickVector = { x: 0, y: 0 };
+    resetJoystickUI();
+});
+
+function updateJoystick(touch) {
+    const rect = joystickContainer.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    // Relative to container
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    // Vector from center
+    let dx = x - centerX;
+    let dy = y - centerY;
+
+    // Max distance (radius of container - radius of knob)
+    const maxDist = (rect.width / 2) - 25;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Normalize if too far
+    if (dist > maxDist) {
+        dx = (dx / dist) * maxDist;
+        dy = (dy / dist) * maxDist;
+    }
+
+    // Update Knob UI
+    joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+    // Set Vector (-1 to 1)
+    joystickVector.x = dx / maxDist;
+    joystickVector.y = dy / maxDist;
+}
+
+function resetJoystickUI() {
+    joystickKnob.style.transform = `translate(-50%, -50%)`;
+}
+
+// Action Button
+actionButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (currentTargetId) {
+        socket.emit('attack', currentTargetId);
+        // Visual feedback on button?
+        actionButton.style.transform = "scale(0.9)";
+    }
+}, { passive: false });
+
+actionButton.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    actionButton.style.transform = "scale(1)";
+});
+
 
 // Targeting & Combat Input
 window.addEventListener('click', (event) => {
@@ -410,10 +539,17 @@ function getLocalInput() {
     let x = 0;
     let z = 0;
 
-    if (keys['w'] || keys['ArrowUp']) z -= 1;
+    // Keyboard (ZQSD/WASD + Arrows)
+    if (keys['w'] || keys['z'] || keys['ArrowUp']) z -= 1;
     if (keys['s'] || keys['ArrowDown']) z += 1;
-    if (keys['a'] || keys['ArrowLeft']) x -= 1;
+    if (keys['a'] || keys['q'] || keys['ArrowLeft']) x -= 1;
     if (keys['d'] || keys['ArrowRight']) x += 1;
+
+    // Joystick Override
+    if (joystickActive) {
+        x = joystickVector.x;
+        z = joystickVector.y;
+    }
 
     return { x, z };
 }
