@@ -9,7 +9,53 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div id="ui-layer">
+    <!-- Main Menu Overlay -->
+    <div id="main-menu">
+        <div id="menu-content">
+            <h1>AESTHERIA</h1>
+
+            <!-- Login Form -->
+            <div id="login-form">
+                <input type="text" id="username" placeholder="Username">
+                <input type="password" id="password" placeholder="Password">
+                <div class="menu-buttons">
+                    <button id="btn-login">Login</button>
+                    <button id="btn-register">Register</button>
+                </div>
+                <div id="login-msg"></div>
+            </div>
+
+            <!-- Character Creation -->
+            <div id="create-char-form" style="display: none;">
+                <h2>Create Hero</h2>
+                <div id="class-selection">
+                    <div class="class-card" data-class="Guerrier" style="border-color: #A52A2A;">
+                        <h3>Guerrier</h3>
+                        <p>Tanky & Strong</p>
+                    </div>
+                    <div class="class-card" data-class="Ranger" style="border-color: #228B22;">
+                        <h3>Ranger</h3>
+                        <p>Fast & Agile</p>
+                    </div>
+                    <div class="class-card" data-class="Mage" style="border-color: #4169E1;">
+                        <h3>Mage</h3>
+                        <p>High Mana</p>
+                    </div>
+                </div>
+                <input type="color" id="char-color" value="#ffffff">
+                <input type="text" id="char-name" placeholder="Hero Name">
+                <button id="btn-create">Create Character</button>
+            </div>
+
+            <!-- Lobby -->
+            <div id="lobby-screen" style="display: none;">
+                <h2 id="welcome-text">Welcome back</h2>
+                <button id="btn-play">ENTER WORLD</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer" style="display: none;">
         <!-- Top Left: Stats -->
         <div id="stats-container">
             <div class="stat-bar-wrapper">

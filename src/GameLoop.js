@@ -95,9 +95,9 @@ class GameLoop {
         });
     }
 
-    addPlayer(id) {
-        this.players[id] = new Player(id);
-        console.log(`Player ${id} added`);
+    addPlayer(id, data) {
+        this.players[id] = new Player(id, data);
+        console.log(`Player ${id} added (Level ${this.players[id].level} ${this.players[id].className})`);
     }
 
     removePlayer(id) {

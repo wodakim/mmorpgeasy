@@ -3,6 +3,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const gameLoop = require('./src/GameLoop');
+const db = require('./src/Database');
+const Player = require('./src/Player');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,15 +13,111 @@ const io = socketIo(server);
 // Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Persistence Loop (Every 30s)
+setInterval(() => {
+    const players = gameLoop.players;
+    for (const id in players) {
+        const p = players[id];
+        if (p.userId) {
+            db.saveCharacter(p.userId, p).catch(console.error);
+        }
+    }
+    console.log('Saved Game State');
+}, 30000);
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    // Send world data to the new player
-    socket.emit('world', gameLoop.getWorldBlocks());
+    // NOTE: We do NOT add player to gameLoop immediately anymore.
+    // Waiting for 'enterWorld' event.
 
-    // Add new player to the game loop
-    gameLoop.addPlayer(socket.id);
+    // 1. Login
+    socket.on('login', async ({ username, password }) => {
+        try {
+            const user = await db.validateUser(username, password);
+            if (user) {
+                // Check if character exists
+                const char = await db.getCharacter(user.id);
+                socket.emit('loginSuccess', { userId: user.id, username: user.username, hasCharacter: !!char });
+            } else {
+                socket.emit('loginError', 'Invalid credentials');
+            }
+        } catch (e) {
+            socket.emit('loginError', 'Server error');
+        }
+    });
+
+    // 2. Register
+    socket.on('register', async ({ username, password }) => {
+        try {
+            const user = await db.createUser(username, password);
+            if (user.error) {
+                socket.emit('registerError', user.error);
+            } else {
+                socket.emit('registerSuccess');
+            }
+        } catch (e) {
+            socket.emit('registerError', 'Server error');
+        }
+    });
+
+    // 3. Create Character
+    socket.on('createCharacter', async ({ userId, name, className, color }) => {
+        try {
+            // Validate inputs?
+            const stats = Player.getClassStats(className);
+            const data = { name, className, skinColor: color, hp: stats.hp, maxHp: stats.hp, mana: stats.mana, maxMana: stats.mana };
+
+            const char = await db.createCharacter(userId, data);
+            if (char.error) {
+                socket.emit('createCharacterError', char.error);
+            } else {
+                socket.emit('createCharacterSuccess');
+            }
+        } catch (e) {
+            socket.emit('createCharacterError', 'Server error');
+        }
+    });
+
+    // 4. Enter World
+    socket.on('enterWorld', async ({ userId }) => {
+        try {
+            const char = await db.getCharacter(userId);
+            if (char) {
+                // Send initial world data first
+                socket.emit('world', gameLoop.getWorldBlocks());
+
+                // Add to Game Loop
+                // Map DB row to Player data structure
+                const playerData = {
+                    userId: char.user_id,
+                    username: char.name, // Display name
+                    className: char.class,
+                    color: char.skinColor,
+                    x: char.x,
+                    z: char.z,
+                    hp: char.hp,
+                    level: char.level,
+                    xp: char.xp,
+                    mana: char.mana
+                };
+
+                gameLoop.addPlayer(socket.id, playerData);
+
+                // Notify Client
+                socket.emit('enterWorldSuccess', {
+                    id: socket.id,
+                    ...playerData,
+                    maxHp: gameLoop.getPlayer(socket.id).maxHp,
+                    maxMana: gameLoop.getPlayer(socket.id).maxMana,
+                    maxXp: gameLoop.getPlayer(socket.id).maxXp
+                });
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    });
 
     // Handle movement input
     socket.on('move', (inputVector) => {
@@ -29,11 +127,7 @@ io.on('connection', (socket) => {
     // Handle Chat Message
     socket.on('chatMessage', (text) => {
         if (!text || typeof text !== 'string') return;
-
-        // Basic sanitization: truncate to 200 chars
         const sanitizedText = text.substring(0, 200);
-
-        // Broadcast to all clients
         io.emit('chatMessage', { id: socket.id, text: sanitizedText });
     });
 
@@ -43,21 +137,18 @@ io.on('connection', (socket) => {
         const mob = gameLoop.getMob(targetId);
 
         if (player && mob && !mob.dead) {
-            // Distance Check
             const dist = Math.sqrt((player.x - mob.x)**2 + (player.z - mob.z)**2);
             if (dist < 5) {
-                // Apply Damage
                 const damage = 10;
                 const xpGained = mob.takeDamage(damage);
-
-                // Broadcast Damage (Floating Text)
                 io.emit('damage', { targetId: mob.id, amount: damage, x: mob.x, z: mob.z });
 
-                // Handle Kill / XP
                 if (xpGained > 0) {
                     const leveledUp = player.gainXp(xpGained);
                     if (leveledUp) {
-                        io.emit('chatMessage', { id: 'SYSTEM', text: `NIVEAU UP ! ${socket.id.substring(0,5)} est niveau ${player.level}` });
+                        io.emit('chatMessage', { id: 'SYSTEM', text: `NIVEAU UP ! ${player.username} est niveau ${player.level}` });
+                        // Save immediately on Level Up
+                        if (player.userId) db.saveCharacter(player.userId, player);
                     }
                 }
             }
@@ -67,6 +158,15 @@ io.on('connection', (socket) => {
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+
+        // Save before remove
+        const player = gameLoop.getPlayer(socket.id);
+        if (player && player.userId) {
+            db.saveCharacter(player.userId, player).then(() => {
+                console.log(`Saved data for ${player.username}`);
+            });
+        }
+
         gameLoop.removePlayer(socket.id);
     });
 });

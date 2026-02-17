@@ -1,24 +1,50 @@
 class Player {
-    constructor(id) {
+    constructor(id, data) {
         this.id = id;
-        this.x = (Math.random() - 0.5) * 5; // Start closer to center
-        this.z = (Math.random() - 0.5) * 5;
-        this.color = Math.floor(Math.random() * 0xffffff);
-        // Speed is now handled by Constants or passed in, but for now we hardcode per-tick speed
-        // Server runs at 20 ticks/sec. Desired speed = 4 units/sec.
-        // Speed per tick = 4 / 20 = 0.2
-        this.speed = 0.2;
+        // Persistence Data
+        this.userId = data.userId || null; // Database User ID
+        this.username = data.username || 'Guest';
+        this.className = data.className || 'Villager';
+        this.color = data.color || 0xffffff;
 
-        // Phase 3: Stats
-        this.hp = 100;
-        this.maxHp = 100;
-        this.mana = 50;
-        this.maxMana = 50;
-        this.level = 1;
-        this.xp = 0;
+        // Position & Stats
+        this.x = data.x !== undefined ? data.x : 0;
+        this.z = data.z !== undefined ? data.z : 0;
+        this.level = data.level || 1;
+        this.xp = data.xp || 0;
+
+        // Calculate Max XP
         this.maxXp = 100;
+        for (let i = 1; i < this.level; i++) {
+            this.maxXp = Math.floor(this.maxXp * 1.5);
+        }
+
+        // Stats based on Class or Loaded Data
+        const stats = Player.getClassStats(this.className);
+        this.maxHp = stats.hp;
+        this.maxMana = stats.mana;
+        this.hp = data.hp !== undefined ? data.hp : this.maxHp;
+        this.mana = data.mana !== undefined ? data.mana : this.maxMana;
+
+        // Speed (4 units/sec base, adjusted by class speed factor)
+        // 4 units/sec / 20 ticks = 0.2 base per tick
+        this.speed = 0.2 * stats.speed;
+
         this.dead = false;
         this.respawnTimer = 0;
+    }
+
+    static getClassStats(className) {
+        switch(className) {
+            case 'Guerrier':
+                return { hp: 150, mana: 30, speed: 1.0, color: 0xA52A2A }; // Red Brick
+            case 'Ranger':
+                return { hp: 90, mana: 40, speed: 1.2, color: 0x228B22 }; // Forest Green
+            case 'Mage':
+                return { hp: 80, mana: 100, speed: 1.0, color: 0x4169E1 }; // Royal Blue
+            default:
+                return { hp: 100, mana: 50, speed: 1.0, color: 0xffffff };
+        }
     }
 
     takeDamage(amount) {

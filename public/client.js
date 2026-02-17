@@ -1,3 +1,4 @@
+/* ... Imports ... */
 const socket = io();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); // Sky blue
@@ -38,12 +39,16 @@ plane.receiveShadow = true;
 scene.add(plane);
 
 // Game State
-const players = {}; // Local storage for player meshes
+const players = {};
+const mobs = {};
 let myId = null;
+let myUserId = null;
+let myUsername = null;
 let worldBlocks = [];
+let gameStarted = false; // State: Menu vs Game
 
 // Constants
-const PLAYER_SPEED_PER_SEC = 4; // Should match server units/sec (0.2 * 20)
+const PLAYER_SPEED_PER_SEC = 4;
 
 // Input State
 const keys = {
@@ -53,6 +58,13 @@ const keys = {
 };
 
 // UI Elements
+const mainMenu = document.getElementById('main-menu');
+const uiLayer = document.getElementById('ui-layer');
+const loginForm = document.getElementById('login-form');
+const createCharForm = document.getElementById('create-char-form');
+const lobbyScreen = document.getElementById('lobby-screen');
+const loginMsg = document.getElementById('login-msg');
+
 const hpBar = document.getElementById('hp-bar');
 const manaBar = document.getElementById('mana-bar');
 const xpBar = document.getElementById('xp-bar');
@@ -65,30 +77,105 @@ const joystickKnob = document.getElementById('joystick-knob');
 const actionButton = document.getElementById('action-button');
 const deathScreen = document.getElementById('death-screen');
 
-// Mobs & Combat State
-const mobs = {}; // { id: { mesh: THREE.Mesh, hp: number, maxHp: number } }
-let currentTargetId = null;
-let targetRing = null;
+// Variables for Menu State
+let selectedClass = 'Guerrier';
+let selectedColor = '#ffffff';
+
+// --- MENU LOGIC ---
+
+// Login
+document.getElementById('btn-login').addEventListener('click', () => {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    if (user && pass) socket.emit('login', { username: user, password: pass });
+});
+
+document.getElementById('btn-register').addEventListener('click', () => {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    if (user && pass) socket.emit('register', { username: user, password: pass });
+});
+
+socket.on('loginError', (msg) => { loginMsg.textContent = msg; });
+socket.on('registerError', (msg) => { loginMsg.textContent = msg; });
+socket.on('registerSuccess', () => { loginMsg.textContent = "Registered! Please login."; loginMsg.style.color = '#2ecc71'; });
+
+socket.on('loginSuccess', (data) => {
+    myUserId = data.userId;
+    myUsername = data.username;
+    loginForm.style.display = 'none';
+    if (data.hasCharacter) {
+        lobbyScreen.style.display = 'flex';
+        document.getElementById('welcome-text').textContent = `Welcome back, ${myUsername}`;
+    } else {
+        createCharForm.style.display = 'flex';
+    }
+});
+
+// Character Creation
+const classCards = document.querySelectorAll('.class-card');
+classCards.forEach(card => {
+    card.addEventListener('click', () => {
+        classCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedClass = card.dataset.class;
+    });
+});
+
+document.getElementById('btn-create').addEventListener('click', () => {
+    const name = document.getElementById('char-name').value;
+    selectedColor = document.getElementById('char-color').value;
+    if (name) {
+        // Convert hex to int
+        const colorInt = parseInt(selectedColor.replace('#', '0x'), 16);
+        socket.emit('createCharacter', { userId: myUserId, name: name, className: selectedClass, color: colorInt });
+    }
+});
+
+socket.on('createCharacterSuccess', () => {
+    createCharForm.style.display = 'none';
+    lobbyScreen.style.display = 'flex';
+    document.getElementById('welcome-text').textContent = `Ready to play, ${myUsername}`;
+});
+
+// Enter World
+document.getElementById('btn-play').addEventListener('click', () => {
+    socket.emit('enterWorld', { userId: myUserId });
+});
+
+socket.on('enterWorldSuccess', (data) => {
+    mainMenu.style.display = 'none';
+    uiLayer.style.display = 'flex';
+    gameStarted = true;
+    myId = data.id;
+    console.log('Entered world as', myId);
+
+    // Setup camera for game
+    camera.rotation.set(0,0,0);
+});
+
+
+// --- GAME LOGIC ---
 
 // Joystick State
 let joystickActive = false;
-let joystickVector = { x: 0, y: 0 }; // Normalized -1 to 1
+let joystickVector = { x: 0, y: 0 };
 
 // Raycaster for targeting
+let currentTargetId = null;
+let targetRing = null;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-// Functions
+// Functions (Mob Mesh, Player Mesh, Floating Text, World Gen) - Kept from Phase 5 but refactored slightly
+
 function createMobMesh() {
-    // Red Cube for Mob
     const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
     const material = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.y = 0.4;
-
-    // Optional: HP Bar above head (sprite) could go here
     return mesh;
 }
 
@@ -98,7 +185,7 @@ function updateTargetRing() {
         const material = new THREE.MeshBasicMaterial({ color: 0xFF0000, side: THREE.DoubleSide });
         targetRing = new THREE.Mesh(geometry, material);
         targetRing.rotation.x = -Math.PI / 2;
-        targetRing.position.y = 0.05; // Just above ground
+        targetRing.position.y = 0.05;
         scene.add(targetRing);
         targetRing.visible = false;
     }
@@ -110,7 +197,7 @@ function updateTargetRing() {
         targetRing.visible = true;
     } else {
         targetRing.visible = false;
-        currentTargetId = null; // Reset if target gone
+        currentTargetId = null;
     }
 }
 
@@ -119,11 +206,6 @@ function createFloatingText(text, x, z, isCrit = false) {
     div.className = 'floating-text' + (isCrit ? ' crit' : '');
     div.textContent = text;
     floatingTextContainer.appendChild(div);
-
-    // Position needs to be updated in render loop to track 3D position
-    // But for simple "float up from where it happened", we can just set initial pos
-    // and let CSS animation handle the float.
-    // We need to project world (x, 0.5, z) to screen coords.
 
     const pos = new THREE.Vector3(x, 1.5, z);
     pos.project(camera);
@@ -134,16 +216,11 @@ function createFloatingText(text, x, z, isCrit = false) {
     div.style.left = `${xPos}px`;
     div.style.top = `${yPos}px`;
 
-    // Remove after animation
-    setTimeout(() => {
-        if (div.parentNode) div.parentNode.removeChild(div);
-    }, 1000);
+    setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 1000);
 }
-
 
 function createPlayerMesh(color) {
     const group = new THREE.Group();
-
     // Body
     const bodyGeo = new THREE.BoxGeometry(0.8, 1, 0.5);
     const bodyMat = new THREE.MeshLambertMaterial({ color: color, flatShading: true });
@@ -152,47 +229,38 @@ function createPlayerMesh(color) {
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
-
     // Head
     const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xffccaa, flatShading: true }); // Skin toneish
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xffccaa, flatShading: true });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 1.25;
     head.castShadow = true;
     head.receiveShadow = true;
     group.add(head);
-
-    // Eyes (direction indicator)
+    // Eyes
     const eyeGeo = new THREE.PlaneGeometry(0.1, 0.1);
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-
     const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(-0.15, 1.3, 0.26); // Slightly in front of face
+    leftEye.position.set(-0.15, 1.3, 0.26);
     group.add(leftEye);
-
     const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
     rightEye.position.set(0.15, 1.3, 0.26);
     group.add(rightEye);
-
     return group;
 }
 
 function getBlockColor(height) {
-    if (height > 3) return 0x6F7887; // Stone
-    if (height > 1.5) return 0x57D066; // Grass
-    return 0x4FB4E6; // Water (or just low blocks)
+    if (height > 3) return 0x6F7887;
+    if (height > 1.5) return 0x57D066;
+    return 0x4FB4E6;
 }
 
 function generateWorld(blocks) {
-    // Clear existing blocks if any (optional for now)
-
     blocks.forEach(block => {
         const geometry = new THREE.BoxGeometry(1, block.height, 1);
         const color = getBlockColor(block.height);
         const material = new THREE.MeshLambertMaterial({ color: color, flatShading: true });
         const mesh = new THREE.Mesh(geometry, material);
-
-        // Position: x, z from server. y is half height because BoxGeometry is centered
         mesh.position.set(block.x, block.height / 2, block.z);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -205,51 +273,45 @@ socket.on('world', (blocks) => {
     generateWorld(blocks);
 });
 
-socket.on('connect', () => {
-    console.log('Connected to server with ID:', socket.id);
-    myId = socket.id;
-});
-
+// State Sync
 socket.on('state', (state) => {
-    // Phase 4 Update: State contains { players, mobs }
+    // Phase 6: We might receive state updates even if not "in game" yet (for background visuals)
+    // But typically we care about rendering other players.
+
     const serverPlayers = state.players || {};
     const serverMobs = state.mobs || {};
 
-    // --- PLAYERS ---
-    // 1. Update existing players and create new ones
+    // Players
     for (const id in serverPlayers) {
         const p = serverPlayers[id];
 
-        // Update UI for me
-        if (id === myId) {
+        // Update UI for me ONLY if game started
+        if (gameStarted && id === myId) {
             updateStatsUI(p);
-            updateInterface(p.level); // Progressive disclosure
             handleDeathState(p.dead);
         }
 
-        // Handle visual death state for everyone
+        // Update Visuals for Everyone
         if (players[id]) {
              updatePlayerVisuals(players[id], p.dead, p.color);
         }
 
         if (!players[id]) {
-            // Create new player
+            // Create
             const mesh = createPlayerMesh(p.color);
             mesh.position.set(p.x, 0, p.z);
             scene.add(mesh);
-
-            // Store mesh and target position
             players[id] = {
                 mesh: mesh,
                 targetPosition: new THREE.Vector3(p.x, 0, p.z),
-                originalColor: p.color // Store original color for respawn
+                originalColor: p.color
             };
         } else {
-            // Update target position
+            // Update
             players[id].targetPosition.set(p.x, 0, p.z);
 
-            // Simple reconciliation: if drift is huge, teleport
-            if (id === myId) {
+            // Reconciliation
+            if (gameStarted && id === myId) {
                  const dist = players[id].mesh.position.distanceTo(new THREE.Vector3(p.x, 0, p.z));
                  if (dist > 2.0) {
                      players[id].mesh.position.set(p.x, 0, p.z);
@@ -258,7 +320,7 @@ socket.on('state', (state) => {
         }
     }
 
-    // 2. Remove disconnected players
+    // Remove
     for (const id in players) {
         if (!serverPlayers[id]) {
             scene.remove(players[id].mesh);
@@ -266,85 +328,52 @@ socket.on('state', (state) => {
         }
     }
 
-    // --- MOBS ---
+    // Mobs
     for (const id in serverMobs) {
         const m = serverMobs[id];
-
         if (!mobs[id]) {
-            // New Mob
             const mesh = createMobMesh();
             mesh.position.set(m.x, 0.4, m.z);
             scene.add(mesh);
-
-            // Allow raycasting
             mesh.userData = { id: id, type: 'mob' };
-
             mobs[id] = { mesh: mesh, hp: m.hp, maxHp: m.maxHp };
         } else {
-            // Update Mob
             if (m.dead && !mobs[id].dead) {
-                // Just died
                 scene.remove(mobs[id].mesh);
                 mobs[id].dead = true;
                 if (currentTargetId === id) currentTargetId = null;
             } else if (!m.dead && mobs[id].dead) {
-                // Respawned
                 scene.add(mobs[id].mesh);
                 mobs[id].dead = false;
                 mobs[id].mesh.position.set(m.x, 0.4, m.z);
             }
             mobs[id].hp = m.hp;
+            if (!mobs[id].dead) {
+                mobs[id].mesh.position.lerp(new THREE.Vector3(m.x, 0.4, m.z), 0.1);
+            }
         }
     }
-
-    // Cleanup Mobs (Optional if mobs can despawn, currently always 5)
 });
 
 socket.on('damage', (data) => {
-    // Show Floating Text
-    createFloatingText(`-${data.amount}`, data.x, data.z);
-
-    // Update local HP if we want smooth bars on mobs later
+    if (gameStarted) createFloatingText(`-${data.amount}`, data.x, data.z);
 });
 
-// Chat Handling
 socket.on('chatMessage', (data) => {
+    if (!gameStarted) return;
     const msgDiv = document.createElement('div');
     msgDiv.className = 'chat-message';
-    // Use textContent for safety
     msgDiv.textContent = `${data.id.substring(0, 5)}: ${data.text}`;
     chatLog.appendChild(msgDiv);
-
-    // Auto fade-out
     setTimeout(() => {
         msgDiv.classList.add('fade-out');
-        setTimeout(() => {
-            if (msgDiv.parentNode) msgDiv.parentNode.removeChild(msgDiv);
-        }, 1000); // Wait for transition
-    }, 10000); // 10 seconds visible
+        setTimeout(() => { if (msgDiv.parentNode) msgDiv.parentNode.removeChild(msgDiv); }, 1000);
+    }, 10000);
 });
 
-// UI Logic
-function updateStatsUI(player) {
-    if (!player) return;
-    if (hpBar) hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
-    if (manaBar) manaBar.style.width = `${(player.mana / player.maxMana) * 100}%`;
-    if (xpBar) xpBar.style.width = `${(player.xp / player.maxXp) * 100}%`;
-}
-
-function updateInterface(level) {
-    if (level < 2) {
-        // Hide action bar for level < 2 if desired, or grey out
-        // For now, per instructions, we just have the function ready
-        // actionBar.style.display = 'none';
-    } else {
-        // actionBar.style.display = 'flex';
-    }
-}
-
+// Visual Update Helpers
 let isDead = false;
 function handleDeathState(dead) {
-    // Only handles UI overlay for local player
     if (dead && !isDead) {
         isDead = true;
         deathScreen.style.display = 'flex';
@@ -357,20 +386,14 @@ function handleDeathState(dead) {
 function updatePlayerVisuals(playerObj, isDead, originalColor) {
     const mesh = playerObj.mesh;
     if (!mesh) return;
-
     if (isDead) {
-        // Apply dead visuals if not already applied
         if (mesh.rotation.z !== Math.PI / 2) {
             mesh.rotation.z = Math.PI / 2;
-            mesh.traverse(child => {
-                if (child.isMesh) child.material.color.setHex(0x555555);
-            });
+            mesh.traverse(child => { if (child.isMesh) child.material.color.setHex(0x555555); });
         }
     } else {
-        // Apply alive visuals if needed
         if (mesh.rotation.z !== 0) {
             mesh.rotation.z = 0;
-            // Restore colors
             if (mesh.children[0]) mesh.children[0].material.color.setHex(originalColor);
             if (mesh.children[1]) mesh.children[1].material.color.setHex(0xffccaa);
             if (mesh.children[2]) mesh.children[2].material.color.setHex(0x000000);
@@ -379,136 +402,84 @@ function updatePlayerVisuals(playerObj, isDead, originalColor) {
     }
 }
 
-// Input Handling
+function updateStatsUI(player) {
+    if (!player) return;
+    if (hpBar) hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
+    if (manaBar) manaBar.style.width = `${(player.mana / player.maxMana) * 100}%`;
+    if (xpBar) xpBar.style.width = `${(player.xp / player.maxXp) * 100}%`;
+}
+
+// Input & Render Loop
 window.addEventListener('keydown', (e) => {
-    // Chat Toggle Logic
+    if (!gameStarted) return;
     if (e.key === 'Enter') {
         if (document.activeElement === chatInput) {
-            // Send message
             const text = chatInput.value.trim();
-            if (text.length > 0) {
-                socket.emit('chatMessage', text);
-            }
+            if (text.length > 0) socket.emit('chatMessage', text);
             chatInput.value = '';
-            chatInput.blur(); // Return focus to game
+            chatInput.blur();
         } else {
-            // Focus chat
-            // Need to prevent the 'Enter' from being typed into the input if we just focused it?
-            // Usually 'focus()' doesn't type the key, but let's be safe.
             e.preventDefault();
             chatInput.focus();
         }
         return;
     }
+    if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) keys[e.key] = true;
 
-    if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) {
-        keys[e.key] = true;
-    }
+    // Desktop Combat
+    if (e.key === '1' && currentTargetId) socket.emit('attack', currentTargetId);
 });
 
 window.addEventListener('keyup', (e) => {
-    if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) {
-        keys[e.key] = false;
-    }
+    if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) keys[e.key] = false;
 });
 
-// --- Touch Controls ---
-
-// Joystick
-joystickContainer.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    joystickActive = true;
-    updateJoystick(e.changedTouches[0]);
-}, { passive: false });
-
-joystickContainer.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (joystickActive) {
-        // Find the touch associated with the joystick if multiple
-        // Assuming first touch in container is joystick for simplicity
-        updateJoystick(e.changedTouches[0]);
-    }
-}, { passive: false });
-
-joystickContainer.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    joystickActive = false;
-    joystickVector = { x: 0, y: 0 };
-    resetJoystickUI();
-});
+// Touch Inputs
+joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystickActive = true; updateJoystick(e.changedTouches[0]); }, { passive: false });
+joystickContainer.addEventListener('touchmove', (e) => { e.preventDefault(); if (joystickActive) updateJoystick(e.changedTouches[0]); }, { passive: false });
+joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystickActive = false; joystickVector = { x: 0, y: 0 }; resetJoystickUI(); });
 
 function updateJoystick(touch) {
     const rect = joystickContainer.getBoundingClientRect();
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-
-    // Relative to container
     const x = touch.clientX - rect.left;
     const y = touch.clientY - rect.top;
-
-    // Vector from center
     let dx = x - centerX;
     let dy = y - centerY;
-
-    // Max distance (radius of container - radius of knob)
     const maxDist = (rect.width / 2) - 25;
     const dist = Math.sqrt(dx*dx + dy*dy);
-
-    // Normalize if too far
-    if (dist > maxDist) {
-        dx = (dx / dist) * maxDist;
-        dy = (dy / dist) * maxDist;
-    }
-
-    // Update Knob UI
+    if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
     joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-
-    // Set Vector (-1 to 1)
     joystickVector.x = dx / maxDist;
     joystickVector.y = dy / maxDist;
 }
+function resetJoystickUI() { joystickKnob.style.transform = `translate(-50%, -50%)`; }
 
-function resetJoystickUI() {
-    joystickKnob.style.transform = `translate(-50%, -50%)`;
-}
-
-// Action Button
 actionButton.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    if (currentTargetId) {
+    if (gameStarted && currentTargetId) {
         socket.emit('attack', currentTargetId);
-        // Visual feedback on button?
         actionButton.style.transform = "scale(0.9)";
     }
 }, { passive: false });
+actionButton.addEventListener('touchend', (e) => { e.preventDefault(); actionButton.style.transform = "scale(1)"; });
 
-actionButton.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    actionButton.style.transform = "scale(1)";
-});
-
-
-// Targeting & Combat Input
+// Targeting
 window.addEventListener('click', (event) => {
-    if (event.target.closest('#ui-layer')) return; // Ignore clicks on UI
+    if (!gameStarted) return;
+    if (event.target.closest('#ui-layer') || event.target.closest('#joystick-container') || event.target.closest('#action-button')) return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
     raycaster.setFromCamera(mouse, camera);
 
-    // Filter meshes that are mobs
     const mobMeshes = [];
-    for (const id in mobs) {
-        if (mobs[id].mesh && !mobs[id].dead) mobMeshes.push(mobs[id].mesh);
-    }
-
+    for (const id in mobs) { if (mobs[id].mesh && !mobs[id].dead) mobMeshes.push(mobs[id].mesh); }
     const intersects = raycaster.intersectObjects(mobMeshes);
 
     if (intersects.length > 0) {
-        // Find mob ID
         const hit = intersects[0].object;
-        // Simple linear search or userData
         for (const id in mobs) {
             if (mobs[id].mesh === hit) {
                 currentTargetId = id;
@@ -522,96 +493,66 @@ window.addEventListener('click', (event) => {
     }
 });
 
-window.addEventListener('keydown', (e) => {
-    if (e.key === '1') {
-        if (currentTargetId) {
-            socket.emit('attack', currentTargetId);
-        }
-    }
-});
-
 function getLocalInput() {
-    // Block movement if typing in chat
-    if (document.activeElement === chatInput) {
-        return { x: 0, z: 0 };
-    }
-
+    if (document.activeElement === chatInput) return { x: 0, z: 0 };
     let x = 0;
     let z = 0;
-
-    // Keyboard (ZQSD/WASD + Arrows)
     if (keys['w'] || keys['z'] || keys['ArrowUp']) z -= 1;
     if (keys['s'] || keys['ArrowDown']) z += 1;
     if (keys['a'] || keys['q'] || keys['ArrowLeft']) x -= 1;
     if (keys['d'] || keys['ArrowRight']) x += 1;
-
-    // Joystick Override
-    if (joystickActive) {
-        x = joystickVector.x;
-        z = joystickVector.y;
-    }
-
+    if (joystickActive) { x = joystickVector.x; z = joystickVector.y; }
     return { x, z };
 }
 
-// Render Loop
 const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta(); // Time since last frame in seconds
+    const delta = clock.getDelta();
 
-    // 1. Client-side Prediction for ME
-    if (myId && players[myId]) {
-        const input = getLocalInput();
-
-        if (input.x !== 0 || input.z !== 0) {
-            // Normalize
-            const len = Math.sqrt(input.x*input.x + input.z*input.z);
-            const dx = (input.x / len);
-            const dz = (input.z / len);
-
-            // Send to server
-            // Note: Server expects direction vector. It applies speed per tick.
-            // We just send the normalized direction.
-            socket.emit('move', { x: dx, z: dz });
-
-            // Move locally (Prediction)
-            // Use time-based movement: Speed * delta time
-            const moveDistance = PLAYER_SPEED_PER_SEC * delta;
-
+    if (!gameStarted) {
+        // Menu Mode: Auto Rotate Camera
+        const speed = 0.5;
+        const radius = 15;
+        const time = Date.now() * 0.0005;
+        camera.position.x = Math.cos(time * speed) * radius;
+        camera.position.z = Math.sin(time * speed) * radius;
+        camera.position.y = 8;
+        camera.lookAt(0, 0, 0);
+    } else {
+        // Game Mode
+        // 1. Client-side Prediction for ME
+        if (myId && players[myId]) {
+            const input = getLocalInput();
+            if ((input.x !== 0 || input.z !== 0) && !isDead) {
+                const len = Math.sqrt(input.x*input.x + input.z*input.z);
+                const dx = (input.x / len);
+                const dz = (input.z / len);
+                socket.emit('move', { x: dx, z: dz });
+                const moveDistance = PLAYER_SPEED_PER_SEC * delta;
+                const myMesh = players[myId].mesh;
+                myMesh.position.x += dx * moveDistance;
+                myMesh.position.z += dz * moveDistance;
+                const targetRotation = Math.atan2(dx, dz);
+                myMesh.rotation.y = targetRotation;
+            }
+            // Camera Follow
             const myMesh = players[myId].mesh;
-            myMesh.position.x += dx * moveDistance;
-            myMesh.position.z += dz * moveDistance;
-
-            // Rotate character to face direction
-            const targetRotation = Math.atan2(dx, dz);
-            myMesh.rotation.y = targetRotation;
+            const cameraOffset = new THREE.Vector3(0, 5, 8);
+            const targetCamPos = myMesh.position.clone().add(cameraOffset);
+            camera.position.lerp(targetCamPos, 0.05);
+            camera.lookAt(myMesh.position);
         }
-
-        // 3. Camera Follow
-        const myMesh = players[myId].mesh;
-
-        // Target position: behind and above
-        const cameraOffset = new THREE.Vector3(0, 5, 8);
-        const targetCamPos = myMesh.position.clone().add(cameraOffset);
-
-        camera.position.lerp(targetCamPos, 0.05);
-        camera.lookAt(myMesh.position);
+        if (currentTargetId) updateTargetRing();
     }
-
-    // Update Ring Position if target moves
-    if (currentTargetId) updateTargetRing();
 
     // 2. Interpolate OTHER players
     for (const id in players) {
-        if (id === myId) continue; // Skip me, I moved myself
-
+        if (id === myId) continue;
         const player = players[id];
         if (player.mesh && player.targetPosition) {
             player.mesh.position.lerp(player.targetPosition, 0.1);
-
-            // Also update rotation if moving
             const dx = player.targetPosition.x - player.mesh.position.x;
             const dz = player.targetPosition.z - player.mesh.position.z;
             if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
@@ -625,7 +566,6 @@ function animate() {
 
 animate();
 
-// Handle Window Resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
