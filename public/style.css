@@ -49,16 +49,43 @@ canvas {
 
 .stat-bar {
     height: 100%;
-    width: 100%; /* Default full, controlled via JS */
+    width: 0%; /* Default 0 */
     transition: width 0.2s ease-out;
 }
 
-#hp-bar {
-    background-color: #e74c3c; /* Red */
+#hp-bar { background-color: #e74c3c; } /* Red */
+#mana-bar { background-color: #3498db; } /* Blue */
+#xp-bar { background-color: #f1c40f; } /* Yellow/Gold */
+
+/* --- Floating Text --- */
+#floating-text-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
 }
 
-#mana-bar {
-    background-color: #3498db; /* Blue */
+.floating-text {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    font-size: 20px;
+    text-shadow: 2px 2px 0 #000;
+    transform: translate(-50%, -50%);
+    animation: floatUp 1s ease-out forwards;
+}
+
+.floating-text.crit {
+    color: #e74c3c;
+    font-size: 26px;
+}
+
+@keyframes floatUp {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -150%) scale(1.5); }
 }
 
 /* --- Minimap (Top Right) --- */

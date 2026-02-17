@@ -37,6 +37,33 @@ io.on('connection', (socket) => {
         io.emit('chatMessage', { id: socket.id, text: sanitizedText });
     });
 
+    // Handle Attack
+    socket.on('attack', (targetId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const mob = gameLoop.getMob(targetId);
+
+        if (player && mob && !mob.dead) {
+            // Distance Check
+            const dist = Math.sqrt((player.x - mob.x)**2 + (player.z - mob.z)**2);
+            if (dist < 5) {
+                // Apply Damage
+                const damage = 10;
+                const xpGained = mob.takeDamage(damage);
+
+                // Broadcast Damage (Floating Text)
+                io.emit('damage', { targetId: mob.id, amount: damage, x: mob.x, z: mob.z });
+
+                // Handle Kill / XP
+                if (xpGained > 0) {
+                    const leveledUp = player.gainXp(xpGained);
+                    if (leveledUp) {
+                        io.emit('chatMessage', { id: 'SYSTEM', text: `NIVEAU UP ! ${socket.id.substring(0,5)} est niveau ${player.level}` });
+                    }
+                }
+            }
+        }
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);

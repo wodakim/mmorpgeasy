@@ -1,14 +1,33 @@
 const Player = require('./Player');
 const World = require('./World');
 const Constants = require('./Constants');
+const Mob = require('./Mob');
 
 class GameLoop {
     constructor() {
         this.players = {};
-        this.playerInputs = {}; // Store input for processing in tick
+        this.playerInputs = {};
+        this.mobs = {};
         this.interval = null;
         this.TICK_RATE = Constants.TICK_RATE;
         this.TICK_TIME = 1000 / this.TICK_RATE;
+
+        this.initMobs();
+    }
+
+    initMobs() {
+        // Spawn 5 mobs at fixed or random positions
+        for (let i = 0; i < 5; i++) {
+            const x = Math.floor(Math.random() * 20) - 10;
+            const z = Math.floor(Math.random() * 20) - 10;
+            // Ensure not in a block (simple check)
+            if (!World.checkCollision(x, z)) {
+                const mobId = `mob_${i}`;
+                this.mobs[mobId] = new Mob(mobId, x, z);
+            } else {
+                i--; // Retry
+            }
+        }
     }
 
     start(io) {
@@ -27,7 +46,9 @@ class GameLoop {
         }
     }
 
+
     update() {
+        // Update Players
         for (const id in this.players) {
             const player = this.players[id];
             const input = this.playerInputs[id];
@@ -37,10 +58,23 @@ class GameLoop {
                 this.playerInputs[id] = null; // Consume input
             }
         }
+
+        // Update Mobs (Respawn logic)
+        for (const id in this.mobs) {
+            const mob = this.mobs[id];
+            if (mob.dead) {
+                if (Date.now() > mob.respawnTimer) {
+                    mob.respawn();
+                }
+            }
+        }
     }
 
     broadcast(io) {
-        io.emit('state', this.players);
+        io.emit('state', {
+            players: this.players,
+            mobs: this.mobs
+        });
     }
 
     addPlayer(id) {
@@ -62,6 +96,14 @@ class GameLoop {
 
     getWorldBlocks() {
         return World.blocks;
+    }
+
+    getMob(id) {
+        return this.mobs[id];
+    }
+
+    getPlayer(id) {
+        return this.players[id];
     }
 }
 

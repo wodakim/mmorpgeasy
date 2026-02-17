@@ -19,6 +19,9 @@
   },
   "homepage": "https://github.com/wodakim/mmorpgeasy#readme",
   "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
   }

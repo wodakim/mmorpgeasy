@@ -54,11 +54,84 @@ const keys = {
 // UI Elements
 const hpBar = document.getElementById('hp-bar');
 const manaBar = document.getElementById('mana-bar');
+const xpBar = document.getElementById('xp-bar');
 const chatInput = document.getElementById('chat-input');
 const chatLog = document.getElementById('chat-log');
 const actionBar = document.getElementById('action-bar-container');
+const floatingTextContainer = document.getElementById('floating-text-container');
+
+// Mobs & Combat State
+const mobs = {}; // { id: { mesh: THREE.Mesh, hp: number, maxHp: number } }
+let currentTargetId = null;
+let targetRing = null;
+
+// Raycaster for targeting
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
 // Functions
+function createMobMesh() {
+    // Red Cube for Mob
+    const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const material = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.position.y = 0.4;
+
+    // Optional: HP Bar above head (sprite) could go here
+    return mesh;
+}
+
+function updateTargetRing() {
+    if (!targetRing) {
+        const geometry = new THREE.RingGeometry(0.6, 0.7, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0xFF0000, side: THREE.DoubleSide });
+        targetRing = new THREE.Mesh(geometry, material);
+        targetRing.rotation.x = -Math.PI / 2;
+        targetRing.position.y = 0.05; // Just above ground
+        scene.add(targetRing);
+        targetRing.visible = false;
+    }
+
+    if (currentTargetId && mobs[currentTargetId]) {
+        const mob = mobs[currentTargetId];
+        targetRing.position.x = mob.mesh.position.x;
+        targetRing.position.z = mob.mesh.position.z;
+        targetRing.visible = true;
+    } else {
+        targetRing.visible = false;
+        currentTargetId = null; // Reset if target gone
+    }
+}
+
+function createFloatingText(text, x, z, isCrit = false) {
+    const div = document.createElement('div');
+    div.className = 'floating-text' + (isCrit ? ' crit' : '');
+    div.textContent = text;
+    floatingTextContainer.appendChild(div);
+
+    // Position needs to be updated in render loop to track 3D position
+    // But for simple "float up from where it happened", we can just set initial pos
+    // and let CSS animation handle the float.
+    // We need to project world (x, 0.5, z) to screen coords.
+
+    const pos = new THREE.Vector3(x, 1.5, z);
+    pos.project(camera);
+
+    const xPos = (pos.x * .5 + .5) * window.innerWidth;
+    const yPos = (-(pos.y * .5) + .5) * window.innerHeight;
+
+    div.style.left = `${xPos}px`;
+    div.style.top = `${yPos}px`;
+
+    // Remove after animation
+    setTimeout(() => {
+        if (div.parentNode) div.parentNode.removeChild(div);
+    }, 1000);
+}
+
+
 function createPlayerMesh(color) {
     const group = new THREE.Group();
 
@@ -173,6 +246,53 @@ socket.on('state', (serverPlayers) => {
     }
 });
 
+// State Update for Mobs
+socket.on('state', (state) => {
+    // If state is the object containing {players, mobs}
+    // Phase 4 update: state structure changed
+    const serverMobs = state.mobs;
+
+    if (!serverMobs) return; // Mobs might not be in the initial structure if we didn't update server fully yet
+
+    for (const id in serverMobs) {
+        const m = serverMobs[id];
+
+        if (!mobs[id]) {
+            // New Mob
+            const mesh = createMobMesh();
+            mesh.position.set(m.x, 0.4, m.z);
+            scene.add(mesh);
+
+            // Allow raycasting by adding to a 'pickable' list if needed
+            // For now, we raycast against scene.children or specific group
+            mesh.userData = { id: id, type: 'mob' };
+
+            mobs[id] = { mesh: mesh, hp: m.hp, maxHp: m.maxHp };
+        } else {
+            // Update Mob
+            if (m.dead && !mobs[id].dead) {
+                // Just died
+                scene.remove(mobs[id].mesh);
+                mobs[id].dead = true;
+                if (currentTargetId === id) currentTargetId = null;
+            } else if (!m.dead && mobs[id].dead) {
+                // Respawned
+                scene.add(mobs[id].mesh);
+                mobs[id].dead = false;
+                mobs[id].mesh.position.set(m.x, 0.4, m.z);
+            }
+            mobs[id].hp = m.hp;
+        }
+    }
+});
+
+socket.on('damage', (data) => {
+    // Show Floating Text
+    createFloatingText(`-${data.amount}`, data.x, data.z);
+
+    // Update local HP if we want smooth bars on mobs later
+});
+
 // Chat Handling
 socket.on('chatMessage', (data) => {
     const msgDiv = document.createElement('div');
@@ -195,6 +315,7 @@ function updateStatsUI(player) {
     if (!player) return;
     if (hpBar) hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
     if (manaBar) manaBar.style.width = `${(player.mana / player.maxMana) * 100}%`;
+    if (xpBar) xpBar.style.width = `${(player.xp / player.maxXp) * 100}%`;
 }
 
 function updateInterface(level) {
@@ -237,6 +358,48 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
     if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) {
         keys[e.key] = false;
+    }
+});
+
+// Targeting & Combat Input
+window.addEventListener('click', (event) => {
+    if (event.target.closest('#ui-layer')) return; // Ignore clicks on UI
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // Filter meshes that are mobs
+    const mobMeshes = [];
+    for (const id in mobs) {
+        if (mobs[id].mesh && !mobs[id].dead) mobMeshes.push(mobs[id].mesh);
+    }
+
+    const intersects = raycaster.intersectObjects(mobMeshes);
+
+    if (intersects.length > 0) {
+        // Find mob ID
+        const hit = intersects[0].object;
+        // Simple linear search or userData
+        for (const id in mobs) {
+            if (mobs[id].mesh === hit) {
+                currentTargetId = id;
+                updateTargetRing();
+                break;
+            }
+        }
+    } else {
+        currentTargetId = null;
+        updateTargetRing();
+    }
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === '1') {
+        if (currentTargetId) {
+            socket.emit('attack', currentTargetId);
+        }
     }
 });
 
@@ -302,6 +465,9 @@ function animate() {
         camera.position.lerp(targetCamPos, 0.05);
         camera.lookAt(myMesh.position);
     }
+
+    // Update Ring Position if target moves
+    if (currentTargetId) updateTargetRing();
 
     // 2. Interpolate OTHER players
     for (const id in players) {

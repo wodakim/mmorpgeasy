@@ -15,6 +15,26 @@ class Player {
         this.mana = 50;
         this.maxMana = 50;
         this.level = 1;
+        this.xp = 0;
+        this.maxXp = 100;
+    }
+
+    gainXp(amount) {
+        this.xp += amount;
+
+        while (this.xp >= this.maxXp) {
+            // Level Up
+            this.xp -= this.maxXp;
+            this.level++;
+            this.maxXp = Math.floor(this.maxXp * 1.5); // Increase requirement
+
+            // Restore stats
+            this.hp = this.maxHp;
+            this.mana = this.maxMana;
+
+            return true; // Leveled up
+        }
+        return false;
     }
 
     handleInput(inputVector, world) {
