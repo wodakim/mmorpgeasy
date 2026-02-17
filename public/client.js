@@ -201,7 +201,12 @@ socket.on('connect', () => {
     myId = socket.id;
 });
 
-socket.on('state', (serverPlayers) => {
+socket.on('state', (state) => {
+    // Phase 4 Update: State contains { players, mobs }
+    const serverPlayers = state.players || {};
+    const serverMobs = state.mobs || {};
+
+    // --- PLAYERS ---
     // 1. Update existing players and create new ones
     for (const id in serverPlayers) {
         const p = serverPlayers[id];
@@ -244,16 +249,8 @@ socket.on('state', (serverPlayers) => {
             delete players[id];
         }
     }
-});
 
-// State Update for Mobs
-socket.on('state', (state) => {
-    // If state is the object containing {players, mobs}
-    // Phase 4 update: state structure changed
-    const serverMobs = state.mobs;
-
-    if (!serverMobs) return; // Mobs might not be in the initial structure if we didn't update server fully yet
-
+    // --- MOBS ---
     for (const id in serverMobs) {
         const m = serverMobs[id];
 
@@ -263,8 +260,7 @@ socket.on('state', (state) => {
             mesh.position.set(m.x, 0.4, m.z);
             scene.add(mesh);
 
-            // Allow raycasting by adding to a 'pickable' list if needed
-            // For now, we raycast against scene.children or specific group
+            // Allow raycasting
             mesh.userData = { id: id, type: 'mob' };
 
             mobs[id] = { mesh: mesh, hp: m.hp, maxHp: m.maxHp };
@@ -284,6 +280,8 @@ socket.on('state', (state) => {
             mobs[id].hp = m.hp;
         }
     }
+
+    // Cleanup Mobs (Optional if mobs can despawn, currently always 5)
 });
 
 socket.on('damage', (data) => {
