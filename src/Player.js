@@ -8,6 +8,13 @@ class Player {
         // Server runs at 20 ticks/sec. Desired speed = 4 units/sec.
         // Speed per tick = 4 / 20 = 0.2
         this.speed = 0.2;
+
+        // Phase 3: Stats
+        this.hp = 100;
+        this.maxHp = 100;
+        this.mana = 50;
+        this.maxMana = 50;
+        this.level = 1;
     }
 
     handleInput(inputVector, world) {

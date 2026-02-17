@@ -1,20 +1,198 @@
 body {
     margin: 0;
     overflow: hidden;
-    background-color: #87CEEB; /* Sky blue background */
-    font-family: 'Arial', sans-serif;
-}
-
-#ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    text-shadow: 1px 1px 2px black;
-    pointer-events: none; /* Let clicks pass through to canvas */
-    z-index: 10;
+    background-color: #000;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
 }
 
 canvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through to 3D scene */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* --- Stats Bars (Top Left) --- */
+#stats-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stat-bar-wrapper {
+    width: 100%;
+    height: 18px;
+    background-color: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stat-bar {
+    height: 100%;
+    width: 100%; /* Default full, controlled via JS */
+    transition: width 0.2s ease-out;
+}
+
+#hp-bar {
+    background-color: #e74c3c; /* Red */
+}
+
+#mana-bar {
+    background-color: #3498db; /* Blue */
+}
+
+/* --- Minimap (Top Right) --- */
+#minimap-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 120px;
+    height: 120px;
+    background-color: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%; /* Circle */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#minimap-player {
+    width: 6px;
+    height: 6px;
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px #000;
+}
+
+/* --- Action Bar (Bottom Center) --- */
+#action-bar-container {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    pointer-events: auto; /* Buttons are clickable */
+}
+
+.action-slot {
+    width: 40px;
+    height: 40px;
+    background-color: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.action-slot:hover {
+    background-color: rgba(50, 50, 50, 0.8);
+}
+
+.action-slot:active {
+    background-color: rgba(100, 100, 100, 0.8);
+    transform: scale(0.95);
+}
+
+.key-hint {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: bold;
+}
+
+/* --- Chat (Bottom Left) --- */
+#chat-container {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 350px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: auto;
+}
+
+#chat-log {
+    height: 150px;
+    overflow-y: hidden; /* Hide scrollbar for cleaner look, messages fade out */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    /* Basic text shadow for readability against game world */
+    text-shadow: 1px 1px 2px black;
+    color: white;
+    font-size: 14px;
+    pointer-events: none; /* Click through chat log */
+    margin-bottom: 5px;
+}
+
+.chat-message {
+    padding: 2px 5px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    margin-top: 2px;
+    animation: fadein 0.2s;
+    /* Word wrap */
+    word-wrap: break-word;
+}
+
+.chat-message.fade-out {
+    opacity: 0;
+    transition: opacity 1s ease-out;
+}
+
+#chat-input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    outline: none;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    /* Make input slightly transparent until focused */
+    opacity: 0.6;
+}
+
+#chat-input:focus {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 255, 255, 0.6);
+    opacity: 1;
+}
+
+@keyframes fadein {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive Tweaks */
+@media (max-width: 600px) {
+    #stats-container { width: 180px; }
+    #chat-container { width: 250px; bottom: 70px; /* Above virtual joystick if added later */ }
+    #minimap-container { width: 80px; height: 80px; }
 }

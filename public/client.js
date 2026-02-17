@@ -51,6 +51,13 @@ const keys = {
     ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
 };
 
+// UI Elements
+const hpBar = document.getElementById('hp-bar');
+const manaBar = document.getElementById('mana-bar');
+const chatInput = document.getElementById('chat-input');
+const chatLog = document.getElementById('chat-log');
+const actionBar = document.getElementById('action-bar-container');
+
 // Functions
 function createPlayerMesh(color) {
     const group = new THREE.Group();
@@ -126,6 +133,12 @@ socket.on('state', (serverPlayers) => {
     for (const id in serverPlayers) {
         const p = serverPlayers[id];
 
+        // Update UI for me
+        if (id === myId) {
+            updateStatsUI(p);
+            updateInterface(p.level); // Progressive disclosure
+        }
+
         if (!players[id]) {
             // Create new player
             const mesh = createPlayerMesh(p.color);
@@ -160,8 +173,62 @@ socket.on('state', (serverPlayers) => {
     }
 });
 
+// Chat Handling
+socket.on('chatMessage', (data) => {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message';
+    // Use textContent for safety
+    msgDiv.textContent = `${data.id.substring(0, 5)}: ${data.text}`;
+    chatLog.appendChild(msgDiv);
+
+    // Auto fade-out
+    setTimeout(() => {
+        msgDiv.classList.add('fade-out');
+        setTimeout(() => {
+            if (msgDiv.parentNode) msgDiv.parentNode.removeChild(msgDiv);
+        }, 1000); // Wait for transition
+    }, 10000); // 10 seconds visible
+});
+
+// UI Logic
+function updateStatsUI(player) {
+    if (!player) return;
+    if (hpBar) hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
+    if (manaBar) manaBar.style.width = `${(player.mana / player.maxMana) * 100}%`;
+}
+
+function updateInterface(level) {
+    if (level < 2) {
+        // Hide action bar for level < 2 if desired, or grey out
+        // For now, per instructions, we just have the function ready
+        // actionBar.style.display = 'none';
+    } else {
+        // actionBar.style.display = 'flex';
+    }
+}
+
 // Input Handling
 window.addEventListener('keydown', (e) => {
+    // Chat Toggle Logic
+    if (e.key === 'Enter') {
+        if (document.activeElement === chatInput) {
+            // Send message
+            const text = chatInput.value.trim();
+            if (text.length > 0) {
+                socket.emit('chatMessage', text);
+            }
+            chatInput.value = '';
+            chatInput.blur(); // Return focus to game
+        } else {
+            // Focus chat
+            // Need to prevent the 'Enter' from being typed into the input if we just focused it?
+            // Usually 'focus()' doesn't type the key, but let's be safe.
+            e.preventDefault();
+            chatInput.focus();
+        }
+        return;
+    }
+
     if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) {
         keys[e.key] = true;
     }
@@ -174,6 +241,11 @@ window.addEventListener('keyup', (e) => {
 });
 
 function getLocalInput() {
+    // Block movement if typing in chat
+    if (document.activeElement === chatInput) {
+        return { x: 0, z: 0 };
+    }
+
     let x = 0;
     let z = 0;
 

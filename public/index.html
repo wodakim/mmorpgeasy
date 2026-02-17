@@ -9,8 +9,36 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div id="ui">
-        <h1>Aestheria</h1>
+    <div id="ui-layer">
+        <!-- Top Left: Stats -->
+        <div id="stats-container">
+            <div class="stat-bar-wrapper">
+                <div id="hp-bar" class="stat-bar"></div>
+            </div>
+            <div class="stat-bar-wrapper">
+                <div id="mana-bar" class="stat-bar"></div>
+            </div>
+        </div>
+
+        <!-- Top Right: Minimap -->
+        <div id="minimap-container">
+            <div id="minimap-player"></div>
+        </div>
+
+        <!-- Bottom Left: Chat -->
+        <div id="chat-container">
+            <div id="chat-log"></div>
+            <input type="text" id="chat-input" placeholder="Press Enter to chat..." autocomplete="off">
+        </div>
+
+        <!-- Bottom Center: Action Bar -->
+        <div id="action-bar-container">
+            <div class="action-slot" data-key="1"><span class="key-hint">1</span></div>
+            <div class="action-slot" data-key="2"><span class="key-hint">2</span></div>
+            <div class="action-slot" data-key="3"><span class="key-hint">3</span></div>
+            <div class="action-slot" data-key="4"><span class="key-hint">4</span></div>
+            <div class="action-slot" data-key="5"><span class="key-hint">5</span></div>
+        </div>
     </div>
     <script src="client.js"></script>
 </body>

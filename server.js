@@ -26,6 +26,17 @@ io.on('connection', (socket) => {
         gameLoop.handlePlayerInput(socket.id, inputVector);
     });
 
+    // Handle Chat Message
+    socket.on('chatMessage', (text) => {
+        if (!text || typeof text !== 'string') return;
+
+        // Basic sanitization: truncate to 200 chars
+        const sanitizedText = text.substring(0, 200);
+
+        // Broadcast to all clients
+        io.emit('chatMessage', { id: socket.id, text: sanitizedText });
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
