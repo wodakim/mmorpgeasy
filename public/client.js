@@ -41,9 +41,11 @@ scene.add(plane);
 // Game State
 const players = {};
 const mobs = {};
+const projectiles = {}; // Client-side projectile meshes
 let myId = null;
 let myUserId = null;
 let myUsername = null;
+let myClass = null;
 let worldBlocks = [];
 let gameStarted = false; // State: Menu vs Game
 
@@ -75,6 +77,7 @@ const floatingTextContainer = document.getElementById('floating-text-container')
 const joystickContainer = document.getElementById('joystick-container');
 const joystickKnob = document.getElementById('joystick-knob');
 const actionButton = document.getElementById('action-button');
+const skillButton = document.getElementById('skill-button');
 const deathScreen = document.getElementById('death-screen');
 
 // Variables for Menu State
@@ -148,7 +151,8 @@ socket.on('enterWorldSuccess', (data) => {
     uiLayer.style.display = 'flex';
     gameStarted = true;
     myId = data.id;
-    console.log('Entered world as', myId);
+    myClass = data.className;
+    console.log('Entered world as', myId, myClass);
 
     // Setup camera for game
     camera.rotation.set(0,0,0);
@@ -280,6 +284,7 @@ socket.on('state', (state) => {
 
     const serverPlayers = state.players || {};
     const serverMobs = state.mobs || {};
+    const serverProjectiles = state.projectiles || [];
 
     // Players
     for (const id in serverPlayers) {
@@ -353,11 +358,134 @@ socket.on('state', (state) => {
             }
         }
     }
+
+    // Projectiles
+    const activeProjIds = new Set();
+    for (const p of serverProjectiles) {
+        activeProjIds.add(p.id);
+        if (!projectiles[p.id]) {
+            // Create
+            let mesh;
+            if (p.name === 'Fireball') {
+                mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(p.radius, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: p.color })
+                );
+            } else if (p.name === 'Piercing Arrow') {
+                mesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), // Thin cylinder
+                    new THREE.MeshBasicMaterial({ color: p.color })
+                );
+                // Rotate to match direction
+                mesh.rotation.x = Math.PI / 2; // Flat
+                mesh.rotation.z = Math.atan2(p.vx, p.vz); // Heading? No, Cylinder default is Y-up.
+                // We need to orient cylinder along velocity vector.
+                // If geometry is vertical (Y-up), we rotate X to make it Z-forward, then rotate Y for direction?
+                // Simpler: Just LookAt target.
+                // Reset rotation
+                mesh.rotation.set(Math.PI/2, 0, 0);
+            } else {
+                 mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(p.radius, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: p.color })
+                );
+            }
+
+            mesh.position.set(p.x, 0.5, p.z);
+
+            if (p.name === 'Piercing Arrow') {
+                 mesh.lookAt(p.x + p.vx, 0.5, p.z + p.vz);
+                 mesh.rotateX(Math.PI / 2); // Adjust if necessary based on geometry
+            }
+
+            scene.add(mesh);
+            projectiles[p.id] = mesh;
+        } else {
+            // Update
+            const mesh = projectiles[p.id];
+            mesh.position.lerp(new THREE.Vector3(p.x, 0.5, p.z), 0.3);
+            // Update orientation if needed? Velocity is constant so orientation shouldn't change much.
+        }
+    }
+    // Remove old projectiles
+    for (const id in projectiles) {
+        if (!activeProjIds.has(id)) {
+            scene.remove(projectiles[id]);
+            delete projectiles[id];
+        }
+    }
 });
 
 socket.on('damage', (data) => {
     if (gameStarted) createFloatingText(`-${data.amount}`, data.x, data.z);
 });
+
+socket.on('effects', (events) => {
+    if (!gameStarted) return;
+    for (const event of events) {
+        if (event.type === 'damage') {
+             createFloatingText(`-${event.amount}`, event.x, event.z);
+        } else if (event.type === 'effect') {
+            if (event.name === 'whirlwind') {
+                createWhirlwindEffect(event.x, event.z, event.radius);
+            } else if (event.name === 'explosion') {
+                createExplosionEffect(event.x, event.z);
+            } else if (event.name === 'hit') {
+                // Small hit puff?
+            }
+        } else if (event.type === 'damage_text') {
+             createFloatingText(`-${event.amount}`, event.x, event.z);
+        }
+    }
+});
+
+function createWhirlwindEffect(x, z, radius) {
+    const geometry = new THREE.TorusGeometry(radius, 0.2, 8, 16);
+    const material = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.8 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, 0.5, z);
+    mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+
+    // Animate
+    let scale = 0.1;
+    const animateEffect = () => {
+        scale += 0.1;
+        mesh.scale.set(scale, scale, scale);
+        mesh.material.opacity -= 0.05;
+        if (mesh.material.opacity > 0) {
+            requestAnimationFrame(animateEffect);
+        } else {
+            scene.remove(mesh);
+            geometry.dispose();
+            material.dispose();
+        }
+    };
+    animateEffect();
+}
+
+function createExplosionEffect(x, z) {
+    const geometry = new THREE.SphereGeometry(1, 16, 16);
+    const material = new THREE.MeshBasicMaterial({ color: 0xFF4500, transparent: true, opacity: 0.8 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, 0.5, z);
+    scene.add(mesh);
+
+    let scale = 1.0;
+    const animateEffect = () => {
+        scale += 0.2;
+        mesh.scale.set(scale, scale, scale);
+        mesh.material.opacity -= 0.1;
+        if (mesh.material.opacity > 0) {
+            requestAnimationFrame(animateEffect);
+        } else {
+            scene.remove(mesh);
+            geometry.dispose();
+            material.dispose();
+        }
+    };
+    animateEffect();
+}
 
 socket.on('chatMessage', (data) => {
     if (!gameStarted) return;
@@ -428,6 +556,26 @@ window.addEventListener('keydown', (e) => {
 
     // Desktop Combat
     if (e.key === '1' && currentTargetId) socket.emit('attack', currentTargetId);
+
+    // Skill 2
+    if (e.key === '2') {
+        const input = getLocalInput();
+        // We need player direction. If stationary, use last moved direction or camera direction?
+        // Simple: Use current movement input. If zero, use camera direction?
+        // Or assume player faces rotation.y.
+        let dx = 0, dz = 0;
+        if (players[myId]) {
+             const rot = players[myId].mesh.rotation.y;
+             // Mesh rotation y is strictly derived from movement?
+             // Not really, it's atan2(dx, dz).
+             // Let's use rotation to derive vector.
+             dx = Math.sin(rot);
+             dz = Math.cos(rot);
+        }
+        socket.emit('skill', { dx, dz });
+        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+        triggerCooldown('2', cd);
+    }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -464,6 +612,35 @@ actionButton.addEventListener('touchstart', (e) => {
     }
 }, { passive: false });
 actionButton.addEventListener('touchend', (e) => { e.preventDefault(); actionButton.style.transform = "scale(1)"; });
+
+skillButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (gameStarted) {
+        skillButton.style.transform = "scale(0.9)";
+        let dx = 0, dz = 1;
+        if (players[myId]) {
+             const rot = players[myId].mesh.rotation.y;
+             dx = Math.sin(rot);
+             dz = Math.cos(rot);
+        }
+        socket.emit('skill', { dx, dz });
+        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+        triggerCooldown('2', cd);
+    }
+}, { passive: false });
+skillButton.addEventListener('touchend', (e) => { e.preventDefault(); skillButton.style.transform = "scale(1)"; });
+
+function triggerCooldown(slot, durationMs) {
+    const overlay = document.getElementById(`cd-${slot}`);
+    if (overlay) {
+        overlay.style.transition = 'none';
+        overlay.style.height = '100%';
+        // Force reflow
+        void overlay.offsetWidth;
+        overlay.style.transition = `height ${durationMs}ms linear`;
+        overlay.style.height = '0%';
+    }
+}
 
 // Targeting
 window.addEventListener('click', (event) => {

@@ -155,6 +155,12 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle Skill
+    socket.on('skill', (input) => {
+        // Input: { dx, dz }
+        gameLoop.castSpell(socket.id, input);
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);

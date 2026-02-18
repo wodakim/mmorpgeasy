@@ -26,6 +26,9 @@ class Player {
         this.hp = data.hp !== undefined ? data.hp : this.maxHp;
         this.mana = data.mana !== undefined ? data.mana : this.maxMana;
 
+        // Cooldown tracking
+        this.cooldowns = {};
+
         // Speed (4 units/sec base, adjusted by class speed factor)
         // 4 units/sec / 20 ticks = 0.2 base per tick
         this.speed = 0.2 * stats.speed;
@@ -62,6 +65,7 @@ class Player {
             this.dead = false;
             this.hp = this.maxHp;
             this.mana = this.maxMana;
+            this.cooldowns = {};
             this.x = 0;
             this.z = 0;
             return true;

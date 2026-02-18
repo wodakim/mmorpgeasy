@@ -2,15 +2,19 @@ const Player = require('./Player');
 const World = require('./World');
 const Constants = require('./Constants');
 const Mob = require('./Mob');
+const SpellSystem = require('./SpellSystem');
 
 class GameLoop {
     constructor() {
         this.players = {};
         this.playerInputs = {};
         this.mobs = {};
+        this.projectiles = []; // Active projectiles
         this.interval = null;
         this.TICK_RATE = Constants.TICK_RATE;
         this.TICK_TIME = 1000 / this.TICK_RATE;
+        this.regenTimer = 0;
+        this.pendingEffects = [];
 
         this.initMobs();
     }
@@ -48,6 +52,38 @@ class GameLoop {
 
 
     update() {
+        const now = Date.now();
+        const deltaTime = this.TICK_TIME / 1000;
+
+        // Passive Regen (Every 2 seconds)
+        if (now > this.regenTimer) {
+            this.regenTimer = now + 2000;
+            for (const id in this.players) {
+                const p = this.players[id];
+                if (!p.dead) {
+                    if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, Math.floor(p.hp + p.maxHp * 0.05));
+                    if (p.mana < p.maxMana) p.mana = Math.min(p.maxMana, Math.floor(p.mana + p.maxMana * 0.05));
+                }
+            }
+        }
+
+        // Update Projectiles
+        const projResult = SpellSystem.updateProjectiles(this.projectiles, this.mobs, deltaTime);
+        this.projectiles = projResult.projectiles;
+
+        // Handle Projectile Events (Damage, Explosions)
+        for (const event of projResult.events) {
+            if (event.type === 'damage') {
+                const mob = this.mobs[event.targetId];
+                if (mob && !mob.dead) {
+                    mob.takeDamage(event.damage);
+                    this.pendingEffects.push({ type: 'damage', x: mob.x, z: mob.z, amount: event.damage });
+                }
+            } else if (event.type === 'effect') {
+                this.pendingEffects.push(event); // Store for broadcast
+            }
+        }
+
         // Update Players
         for (const id in this.players) {
             const player = this.players[id];
@@ -78,26 +114,34 @@ class GameLoop {
             } else {
                 // AI Update
                 const action = mob.update(this.players, World);
-                if (action && action.type === 'attack') {
-                     // Player took damage, logic handled inside mob.update calling player.takeDamage
-                     // But we might want to broadcast damage effect
-                     // Although floating text on player is usually for damage dealt, let's keep it simple.
-                     // Maybe flash screen red on client?
-                }
             }
         }
     }
 
+    // Add pendingEffects queue
+    initEffectsQueue() {
+        this.pendingEffects = [];
+    }
+
     broadcast(io) {
+        // Send State
         io.emit('state', {
             players: this.players,
-            mobs: this.mobs
+            mobs: this.mobs,
+            projectiles: this.projectiles
         });
+
+        // Flush Effects (One-shot events like Explosions, Hits)
+        if (this.pendingEffects && this.pendingEffects.length > 0) {
+            io.emit('effects', this.pendingEffects);
+            this.pendingEffects = [];
+        }
     }
 
     addPlayer(id, data) {
         this.players[id] = new Player(id, data);
         console.log(`Player ${id} added (Level ${this.players[id].level} ${this.players[id].className})`);
+        if (!this.pendingEffects) this.initEffectsQueue();
     }
 
     removePlayer(id) {
@@ -122,6 +166,32 @@ class GameLoop {
 
     getPlayer(id) {
         return this.players[id];
+    }
+
+    castSpell(playerId, input) {
+        const player = this.players[playerId];
+        if (!player || player.dead) return;
+
+        const result = SpellSystem.cast(player, input);
+        if (!result || result.error) return; // Handle error (maybe send back to client?)
+
+        if (result.type === 'projectile') {
+            this.projectiles.push(result.projectile);
+        } else if (result.type === 'aoe') {
+            // Instant AOE logic
+            this.pendingEffects.push({ type: 'effect', name: 'whirlwind', x: player.x, z: player.z, radius: result.radius });
+
+            // Apply Damage
+            const hits = SpellSystem.resolveAoE(result, this.mobs);
+            hits.forEach(hit => {
+                const mob = this.mobs[hit.targetId];
+                if (mob && !mob.dead) {
+                    mob.takeDamage(hit.damage);
+                    // We could add damage text effect here if we want
+                    this.pendingEffects.push({ type: 'damage_text', x: mob.x, z: mob.z, amount: hit.damage });
+                }
+            });
+        }
     }
 }
 
