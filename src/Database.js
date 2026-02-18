@@ -34,6 +34,8 @@ db.serialize(() => {
         x REAL,
         z REAL,
         inventory TEXT,
+        gold INTEGER DEFAULT 0,
+        quests TEXT,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 });
@@ -93,9 +95,9 @@ class Database {
     createCharacter(userId, data) {
         return new Promise((resolve, reject) => {
             const { name, className, skinColor, hp, maxHp, mana, maxMana, inventory } = data;
-            const stmt = `INSERT INTO characters (user_id, name, class, skinColor, level, xp, hp, maxHp, mana, maxMana, x, z, inventory)
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            // Default Spawn: 0, 0. Level 1. XP 0.
+            const stmt = `INSERT INTO characters (user_id, name, class, skinColor, level, xp, hp, maxHp, mana, maxMana, x, z, inventory, gold, quests)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '{}')`;
+            // Default Spawn: 0, 0. Level 1. XP 0. Gold 0. Quests {}.
             const values = [userId, name, className, skinColor, 1, 0, hp, maxHp, mana, maxMana, 0, 0, inventory || '[]'];
 
             db.run(stmt, values, function(err) {
@@ -115,12 +117,11 @@ class Database {
 
     saveCharacter(userId, data) {
         return new Promise((resolve, reject) => {
-            const stmt = `UPDATE characters SET level = ?, xp = ?, hp = ?, x = ?, z = ?, inventory = ? WHERE user_id = ?`;
-            // Note: We don't save maxHp/maxMana/class constantly as they are derived/static usually,
-            // but for level ups we might want to save everything.
-            // For MVP persistence: Level, XP, Position, Current HP, Inventory.
+            const stmt = `UPDATE characters SET level = ?, xp = ?, hp = ?, x = ?, z = ?, inventory = ?, gold = ?, quests = ? WHERE user_id = ?`;
             const invString = JSON.stringify(data.inventory || []);
-            db.run(stmt, [data.level, data.xp, data.hp, data.x, data.z, invString, userId], (err) => {
+            const questString = JSON.stringify(data.quests || {});
+
+            db.run(stmt, [data.level, data.xp, data.hp, data.x, data.z, invString, data.gold || 0, questString, userId], (err) => {
                 if (err) reject(err);
                 else resolve(true);
             });

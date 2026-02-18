@@ -19,6 +19,10 @@ class Player {
         // If loaded as string (from DB), parse it.
         this.inventory = typeof data.inventory === 'string' ? JSON.parse(data.inventory) : (data.inventory || []);
 
+        // Economy & Quests
+        this.gold = data.gold || 0;
+        this.quests = typeof data.quests === 'string' ? JSON.parse(data.quests) : (data.quests || {}); // { questId: { status: 'active'|'completed', progress: 0 } }
+
         // Calculate Max XP
         this.maxXp = 100;
         for (let i = 1; i < this.level; i++) {

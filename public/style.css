@@ -530,6 +530,101 @@ button:hover {
     transform: scale(0.9);
 }
 
+/* --- Phase 9: Shop & Quest --- */
+
+/* Shop Overlay */
+#shop-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background-color: rgba(20, 20, 25, 0.95);
+    border: 2px solid #e67e22; /* Orange border for shop */
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 55;
+    pointer-events: auto;
+    color: white;
+}
+
+#shop-list {
+    width: 100%;
+    margin-bottom: 20px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.shop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #444;
+}
+
+.shop-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.shop-item button {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+/* Quest Dialog */
+#quest-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background-color: rgba(25, 20, 30, 0.95);
+    border: 2px solid #9b59b6; /* Purple for quests */
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 55;
+    pointer-events: auto;
+    color: white;
+    text-align: center;
+}
+
+.quest-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* Quest Tracker */
+#quest-tracker {
+    position: absolute;
+    top: 100px;
+    right: 20px;
+    width: 200px;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 5px;
+    color: white;
+    pointer-events: none;
+}
+
+#quest-tracker h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #f1c40f;
+}
+
+.tracker-entry {
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
 /* Responsive Tweaks */
 @media (max-width: 600px) {
     #stats-container { width: 180px; }
@@ -537,4 +632,5 @@ button:hover {
     #minimap-container { width: 80px; height: 80px; }
     #action-bar-container { display: none; /* Hide keyboard action bar on mobile if redundant */ }
     #bag-button { right: 110px; } /* Adjust pos */
+    #shop-container, #quest-dialog { width: 90%; }
 }

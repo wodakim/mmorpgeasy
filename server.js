@@ -6,6 +6,7 @@ const gameLoop = require('./src/GameLoop');
 const db = require('./src/Database');
 const Player = require('./src/Player');
 const ItemSystem = require('./src/ItemSystem');
+const QuestSystem = require('./src/QuestSystem');
 
 const app = express();
 const server = http.createServer(app);
@@ -155,13 +156,81 @@ io.on('connection', (socket) => {
                 io.emit('damage', { targetId: mob.id, amount: damage, x: mob.x, z: mob.z });
 
                 if (xpGained > 0) {
+                    // Check Quest Progress
+                    const questUpdate = QuestSystem.checkProgress(player, 'kill', mob.id);
+                    if (questUpdate) {
+                        socket.emit('questUpdate', questUpdate);
+                    }
+
                     const leveledUp = player.gainXp(xpGained);
                     if (leveledUp) {
                         io.emit('chatMessage', { id: 'SYSTEM', text: `NIVEAU UP ! ${player.username} est niveau ${player.level}` });
-                        // Save immediately on Level Up
-                        if (player.userId) db.saveCharacter(player.userId, player);
                     }
+                    if (player.userId) db.saveCharacter(player.userId, player);
                 }
+            }
+        }
+    });
+
+    // Handle NPC Interaction
+    socket.on('interact', (npcId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const npc = gameLoop.npcs[npcId];
+        if (player && npc) {
+            const dist = Math.sqrt((player.x - npc.x)**2 + (player.z - npc.z)**2);
+            if (dist < 3) {
+                socket.emit('npcDialog', { id: npc.id, name: npc.name, text: npc.dialogue, type: npc.type });
+            }
+        }
+    });
+
+    // Handle Buy Item
+    socket.on('buyItem', (itemId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const item = ItemSystem.getItem(itemId);
+        // Simple prices for now
+        const prices = { 'health_potion': 10, 'rusty_sword': 20, 'leather_tunic': 30 };
+        const price = prices[itemId] || 999;
+
+        if (player && item && player.gold >= price) {
+            player.gold -= price;
+            player.inventory.push({ itemId: item.id, equipped: false });
+            socket.emit('chatMessage', { id: 'SYSTEM', text: `Bought ${item.name} for ${price} gold` });
+            socket.emit('updateGold', player.gold); // Sync gold
+            if (player.userId) db.saveCharacter(player.userId, player);
+        } else {
+            socket.emit('chatMessage', { id: 'SYSTEM', text: `Not enough gold!` });
+        }
+    });
+
+    // Handle Quest Accept
+    socket.on('acceptQuest', (questId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const quest = QuestSystem.getQuest(questId);
+        if (player && quest) {
+            if (!player.quests[questId]) {
+                player.quests[questId] = { status: 'active', progress: 0 };
+                socket.emit('chatMessage', { id: 'SYSTEM', text: `Quest Accepted: ${quest.name}` });
+                socket.emit('questUpdate', { questId: questId, progress: 0, max: quest.count });
+                if (player.userId) db.saveCharacter(player.userId, player);
+            }
+        }
+    });
+
+    // Handle Quest Complete (Turn In)
+    socket.on('completeQuest', (questId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const quest = QuestSystem.getQuest(questId);
+        if (player && quest && player.quests[questId]) {
+            const qState = player.quests[questId];
+            if (qState.status === 'active' && qState.progress >= quest.count) {
+                qState.status = 'completed';
+                player.gold += quest.reward.gold;
+                player.gainXp(quest.reward.xp);
+                socket.emit('chatMessage', { id: 'SYSTEM', text: `Quest Completed! +${quest.reward.gold} Gold, +${quest.reward.xp} XP` });
+                socket.emit('updateGold', player.gold);
+                socket.emit('questComplete', questId);
+                if (player.userId) db.saveCharacter(player.userId, player);
             }
         }
     });

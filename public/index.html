@@ -132,6 +132,32 @@
         </div>
 
         <div id="bag-button">🎒</div>
+
+        <!-- Shop UI -->
+        <div id="shop-container" style="display: none;">
+            <h2>MARCHAND</h2>
+            <div id="shop-list">
+                <!-- Items populated via JS -->
+            </div>
+            <button id="shop-close">Fermer</button>
+        </div>
+
+        <!-- Quest Dialog -->
+        <div id="quest-dialog" style="display: none;">
+            <h2 id="quest-title">Titre</h2>
+            <p id="quest-text">Texte de la quête...</p>
+            <div class="quest-buttons">
+                <button id="btn-accept-quest">Accepter</button>
+                <button id="btn-complete-quest" style="display:none;">Terminer</button>
+                <button id="btn-close-quest">Fermer</button>
+            </div>
+        </div>
+
+        <!-- Quest Tracker -->
+        <div id="quest-tracker" style="display: none;">
+            <h3>QUÊTES</h3>
+            <div id="quest-list"></div>
+        </div>
     </div>
     <script src="client.js"></script>
 </body>

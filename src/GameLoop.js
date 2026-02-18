@@ -3,12 +3,14 @@ const World = require('./World');
 const Constants = require('./Constants');
 const Mob = require('./Mob');
 const SpellSystem = require('./SpellSystem');
+const NPC = require('./NPC');
 
 class GameLoop {
     constructor() {
         this.players = {};
         this.playerInputs = {};
         this.mobs = {};
+        this.npcs = {}; // { id: NPC }
         this.projectiles = []; // Active projectiles
         this.interval = null;
         this.TICK_RATE = Constants.TICK_RATE;
@@ -19,6 +21,12 @@ class GameLoop {
         this.nextLootId = 0;
 
         this.initMobs();
+        this.initNPCs();
+    }
+
+    initNPCs() {
+        this.npcs['merchant'] = new NPC('merchant', 'Merchant', 'Marchand', 2, 2, "Bienvenue dans ma boutique !");
+        this.npcs['sage'] = new NPC('sage', 'Sage', 'Vieux Sage', -2, 2, "J'ai une mission pour toi.");
     }
 
     initMobs() {
@@ -147,7 +155,8 @@ class GameLoop {
             players: this.players,
             mobs: this.mobs,
             projectiles: this.projectiles,
-            loot: this.loot
+            loot: this.loot,
+            npcs: this.npcs
         });
 
         // Flush Effects (One-shot events like Explosions, Hits)

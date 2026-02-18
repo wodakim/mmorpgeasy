@@ -26,6 +26,9 @@ class Mob {
             const p = players[id];
             if (p.dead) continue; // Ignore dead players
 
+            // Safe Zone Check: If player is within 10 units of 0,0, ignore
+            if (Math.sqrt(p.x*p.x + p.z*p.z) < 10) continue;
+
             const dist = Math.sqrt((this.x - p.x)**2 + (this.z - p.z)**2);
             if (dist < minDist) {
                 minDist = dist;
