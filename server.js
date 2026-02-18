@@ -65,9 +65,15 @@ io.on('connection', (socket) => {
 
     // 3. Create Character
     socket.on('createCharacter', async ({ userId, name, className, color }) => {
-        console.log(`[DEBUG] Received createCharacter for user ${userId}: Name=${name}, Class=${className}`);
+        console.log(`[DEBUG] Received createCharacter for user ${userId}: Name=${name}, Class=${className}, Color=${color}`);
+
+        if (!userId || !name || !className || !color) {
+            console.warn('[DEBUG] Missing required fields for createCharacter');
+            socket.emit('createCharacterError', 'Missing required fields');
+            return;
+        }
+
         try {
-            // Validate inputs?
             const stats = Player.getClassStats(className);
             const data = { name, className, skinColor: color, hp: stats.hp, maxHp: stats.hp, mana: stats.mana, maxMana: stats.mana };
 

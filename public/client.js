@@ -151,9 +151,8 @@ document.getElementById('btn-create').addEventListener('click', () => {
     const name = document.getElementById('char-name').value;
     selectedColor = document.getElementById('char-color').value;
     if (name) {
-        // Convert hex to int
-        const colorInt = parseInt(selectedColor.replace('#', '0x'), 16);
-        const data = { userId: myUserId, name: name, className: selectedClass, color: colorInt };
+        // Send as Hex String
+        const data = { userId: myUserId, name: name, className: selectedClass, color: selectedColor };
         console.log('Données envoyées:', data); // Debug Log
         socket.emit('createCharacter', data);
     } else {

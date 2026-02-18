@@ -100,6 +100,7 @@ class Database {
 
             db.run(stmt, values, function(err) {
                 if (err) {
+                    console.error('SQL Error during createCharacter:', err); // Explicit Log
                     if (err.message.includes('UNIQUE constraint failed')) {
                         resolve({ error: 'Character name already taken' });
                     } else {
