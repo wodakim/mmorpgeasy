@@ -5,6 +5,7 @@ const path = require('path');
 const gameLoop = require('./src/GameLoop');
 const db = require('./src/Database');
 const Player = require('./src/Player');
+const ItemSystem = require('./src/ItemSystem');
 
 const app = express();
 const server = http.createServer(app);
@@ -139,7 +140,7 @@ io.on('connection', (socket) => {
         if (player && mob && !mob.dead) {
             const dist = Math.sqrt((player.x - mob.x)**2 + (player.z - mob.z)**2);
             if (dist < 5) {
-                const damage = 10;
+                const damage = player.getDamage();
                 const xpGained = mob.takeDamage(damage);
                 io.emit('damage', { targetId: mob.id, amount: damage, x: mob.x, z: mob.z });
 
@@ -152,6 +153,58 @@ io.on('connection', (socket) => {
                     }
                 }
             }
+        }
+    });
+
+    // Handle Pickup Loot
+    socket.on('pickup', (lootId) => {
+        const player = gameLoop.getPlayer(socket.id);
+        const loot = gameLoop.loot[lootId]; // Access from GameLoop state directly?
+        // GameLoop doesn't expose loot object publicly in a clean way except via getter or direct property access if module allows.
+        // GameLoop exports an instance. We can access .loot if it's public.
+        // Checking GameLoop.js: this.loot = {} is in constructor.
+
+        if (player && loot) {
+             const dist = Math.sqrt((player.x - loot.x)**2 + (player.z - loot.z)**2);
+             if (dist < 3) {
+                 const item = ItemSystem.getItem(loot.itemId);
+                 if (item) {
+                     // Add to inventory (parse string if needed? No, logic in Player handles it as array)
+                     player.inventory.push({ itemId: item.id, equipped: false });
+                     gameLoop.removeLoot(lootId); // Helper added in previous step
+
+                     socket.emit('chatMessage', { id: 'SYSTEM', text: `You picked up ${item.name}` });
+                     if (player.userId) db.saveCharacter(player.userId, player);
+                 }
+             }
+        }
+    });
+
+    // Handle Use Item (Equip/Consume)
+    socket.on('useItem', (index) => {
+        const player = gameLoop.getPlayer(socket.id);
+        if (player && player.inventory[index]) {
+            const entry = player.inventory[index];
+            const item = ItemSystem.getItem(entry.itemId);
+
+            if (item.type === 'potion') {
+                if (item.stats.heal) {
+                    player.hp = Math.min(player.hp + item.stats.heal, player.maxHp);
+                    player.inventory.splice(index, 1);
+                }
+            } else if (item.type === 'weapon' || item.type === 'armor') {
+                if (entry.equipped) {
+                    entry.equipped = false;
+                } else {
+                    player.inventory.forEach(i => {
+                        const d = ItemSystem.getItem(i.itemId);
+                        if (d.type === item.type) i.equipped = false;
+                    });
+                    entry.equipped = true;
+                }
+                player.recalculateStats();
+            }
+            if (player.userId) db.saveCharacter(player.userId, player);
         }
     });
 

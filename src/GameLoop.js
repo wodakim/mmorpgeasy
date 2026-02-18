@@ -15,6 +15,8 @@ class GameLoop {
         this.TICK_TIME = 1000 / this.TICK_RATE;
         this.regenTimer = 0;
         this.pendingEffects = [];
+        this.loot = {}; // { id: { x, z, itemId } }
+        this.nextLootId = 0;
 
         this.initMobs();
     }
@@ -108,8 +110,24 @@ class GameLoop {
             const mob = this.mobs[id];
 
             if (mob.dead) {
+                if (!mob.lootDropped) {
+                    // Drop Loot Chance (e.g. 50%)
+                    if (Math.random() < 0.5) {
+                        const lootId = `loot_${this.nextLootId++}`;
+                        // Random item? Or simple specific item?
+                        // Let's drop a 'health_potion' or 'rusty_sword' randomly
+                        const items = ['health_potion', 'rusty_sword', 'leather_tunic'];
+                        const item = items[Math.floor(Math.random() * items.length)];
+
+                        this.loot[lootId] = { id: lootId, x: mob.x, z: mob.z, itemId: item };
+                        // Broadcast creation logic is implicit via state sync
+                    }
+                    mob.lootDropped = true;
+                }
+
                 if (Date.now() > mob.respawnTimer) {
                     mob.respawn();
+                    mob.lootDropped = false;
                 }
             } else {
                 // AI Update
@@ -128,7 +146,8 @@ class GameLoop {
         io.emit('state', {
             players: this.players,
             mobs: this.mobs,
-            projectiles: this.projectiles
+            projectiles: this.projectiles,
+            loot: this.loot
         });
 
         // Flush Effects (One-shot events like Explosions, Hits)
@@ -166,6 +185,10 @@ class GameLoop {
 
     getPlayer(id) {
         return this.players[id];
+    }
+
+    removeLoot(id) {
+        delete this.loot[id];
     }
 
     castSpell(playerId, input) {

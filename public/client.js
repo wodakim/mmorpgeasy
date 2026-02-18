@@ -41,11 +41,13 @@ scene.add(plane);
 // Game State
 const players = {};
 const mobs = {};
-const projectiles = {}; // Client-side projectile meshes
+const projectiles = {};
+const lootBags = {};
 let myId = null;
 let myUserId = null;
 let myUsername = null;
 let myClass = null;
+let myInventory = [];
 let worldBlocks = [];
 let gameStarted = false; // State: Menu vs Game
 
@@ -79,10 +81,29 @@ const joystickKnob = document.getElementById('joystick-knob');
 const actionButton = document.getElementById('action-button');
 const skillButton = document.getElementById('skill-button');
 const deathScreen = document.getElementById('death-screen');
+const inventoryContainer = document.getElementById('inventory-container');
+const bagButton = document.getElementById('bag-button');
+const itemTooltip = document.getElementById('item-tooltip');
 
 // Variables for Menu State
 let selectedClass = 'Guerrier';
 let selectedColor = '#ffffff';
+
+// Inventory State
+let isInventoryOpen = false;
+
+// Cooldown State
+const cooldowns = {
+    '1': 0,
+    '2': 0
+};
+
+// Item Definitions
+const ITEM_DEFS = {
+    'rusty_sword': { name: 'Épée Rouillée', color: '#7f8c8d' },
+    'leather_tunic': { name: 'Tunique en Cuir', color: '#d35400' },
+    'health_potion': { name: 'Potion de Soin', color: '#e74c3c' }
+};
 
 // --- MENU LOGIC ---
 
@@ -285,6 +306,7 @@ socket.on('state', (state) => {
     const serverPlayers = state.players || {};
     const serverMobs = state.mobs || {};
     const serverProjectiles = state.projectiles || [];
+    const serverLoot = state.loot || {};
 
     // Players
     for (const id in serverPlayers) {
@@ -294,6 +316,14 @@ socket.on('state', (state) => {
         if (gameStarted && id === myId) {
             updateStatsUI(p);
             handleDeathState(p.dead);
+
+            // Sync Inventory
+            if (p.inventory) {
+                if (JSON.stringify(myInventory) !== JSON.stringify(p.inventory)) {
+                    myInventory = p.inventory;
+                    if (isInventoryOpen) renderInventory();
+                }
+            }
         }
 
         // Update Visuals for Everyone
@@ -412,6 +442,35 @@ socket.on('state', (state) => {
         if (!activeProjIds.has(id)) {
             scene.remove(projectiles[id]);
             delete projectiles[id];
+        }
+    }
+
+    // Loot Bags
+    const activeLootIds = new Set();
+    for (const id in serverLoot) {
+        const l = serverLoot[id];
+        activeLootIds.add(id);
+        if (!lootBags[id]) {
+            const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+            const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(l.x, 0.15, l.z);
+            mesh.castShadow = true;
+            mesh.userData = { id: id, type: 'loot' };
+            scene.add(mesh);
+            lootBags[id] = { mesh: mesh, itemId: l.itemId };
+        }
+    }
+    for (const id in lootBags) {
+        if (!activeLootIds.has(id)) {
+            scene.remove(lootBags[id].mesh);
+            delete lootBags[id];
+        } else {
+             // Check auto-pickup distance
+             if (players[myId] && players[myId].mesh) {
+                 const dist = lootBags[id].mesh.position.distanceTo(players[myId].mesh.position);
+                 if (dist < 1.0) socket.emit('pickup', id);
+             }
         }
     }
 });
@@ -540,6 +599,7 @@ function updateStatsUI(player) {
 // Input & Render Loop
 window.addEventListener('keydown', (e) => {
     if (!gameStarted) return;
+    if (e.key.toLowerCase() === 'i') toggleInventory();
     if (e.key === 'Enter') {
         if (document.activeElement === chatInput) {
             const text = chatInput.value.trim();
@@ -559,21 +619,20 @@ window.addEventListener('keydown', (e) => {
 
     // Skill 2
     if (e.key === '2') {
+        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+        if (Date.now() < cooldowns['2']) return; // Strict check
+
         const input = getLocalInput();
-        // We need player direction. If stationary, use last moved direction or camera direction?
-        // Simple: Use current movement input. If zero, use camera direction?
-        // Or assume player faces rotation.y.
         let dx = 0, dz = 0;
         if (players[myId]) {
              const rot = players[myId].mesh.rotation.y;
-             // Mesh rotation y is strictly derived from movement?
-             // Not really, it's atan2(dx, dz).
-             // Let's use rotation to derive vector.
              dx = Math.sin(rot);
              dz = Math.cos(rot);
         }
         socket.emit('skill', { dx, dz });
-        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+
+        // Trigger Cooldown
+        cooldowns['2'] = Date.now() + cd;
         triggerCooldown('2', cd);
     }
 });
@@ -588,6 +647,7 @@ joystickContainer.addEventListener('touchmove', (e) => { e.preventDefault(); if 
 joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystickActive = false; joystickVector = { x: 0, y: 0 }; resetJoystickUI(); });
 
 function updateJoystick(touch) {
+    if (isInventoryOpen) return;
     const rect = joystickContainer.getBoundingClientRect();
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
@@ -616,6 +676,9 @@ actionButton.addEventListener('touchend', (e) => { e.preventDefault(); actionBut
 skillButton.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (gameStarted) {
+        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+        if (Date.now() < cooldowns['2']) return;
+
         skillButton.style.transform = "scale(0.9)";
         let dx = 0, dz = 1;
         if (players[myId]) {
@@ -624,7 +687,8 @@ skillButton.addEventListener('touchstart', (e) => {
              dz = Math.cos(rot);
         }
         socket.emit('skill', { dx, dz });
-        const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
+
+        cooldowns['2'] = Date.now() + cd;
         triggerCooldown('2', cd);
     }
 }, { passive: false });
@@ -642,27 +706,72 @@ function triggerCooldown(slot, durationMs) {
     }
 }
 
-// Targeting
+document.getElementById('bag-button').addEventListener('click', toggleInventory);
+
+function toggleInventory() {
+    isInventoryOpen = !isInventoryOpen;
+    document.getElementById('inventory-container').style.display = isInventoryOpen ? 'flex' : 'none';
+    if (isInventoryOpen) renderInventory();
+}
+
+function renderInventory() {
+    const grid = document.getElementById('inventory-grid');
+    const slots = grid.querySelectorAll('.inv-slot');
+    const tooltip = document.getElementById('item-tooltip');
+
+    slots.forEach(slot => {
+        slot.innerHTML = '';
+        slot.classList.remove('equipped');
+        slot.onclick = null;
+        slot.onmouseover = null;
+        slot.onmouseout = null;
+    });
+
+    myInventory.forEach((item, index) => {
+        if (index >= 16) return;
+        const slot = slots[index];
+        const def = ITEM_DEFS[item.itemId] || { name: item.itemId, color: '#ccc' };
+
+        const icon = document.createElement('div');
+        icon.className = 'inv-item-icon';
+        icon.style.backgroundColor = def.color;
+        slot.appendChild(icon);
+
+        if (item.equipped) slot.classList.add('equipped');
+
+        slot.onclick = () => socket.emit('useItem', index);
+        slot.onmouseover = (e) => {
+            tooltip.style.display = 'block';
+            tooltip.textContent = def.name + (item.equipped ? ' (Equipped)' : '');
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+        };
+        slot.onmouseout = () => { tooltip.style.display = 'none'; };
+    });
+}
+
+// Targeting & Loot Click
 window.addEventListener('click', (event) => {
     if (!gameStarted) return;
-    if (event.target.closest('#ui-layer') || event.target.closest('#joystick-container') || event.target.closest('#action-button')) return;
+    if (event.target.closest('#ui-layer') || event.target.closest('#joystick-container') || event.target.closest('#action-button') || event.target.closest('#inventory-container') || event.target.closest('#bag-button')) return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    const mobMeshes = [];
-    for (const id in mobs) { if (mobs[id].mesh && !mobs[id].dead) mobMeshes.push(mobs[id].mesh); }
-    const intersects = raycaster.intersectObjects(mobMeshes);
+    const objects = [];
+    for (const id in mobs) { if (mobs[id].mesh && !mobs[id].dead) objects.push(mobs[id].mesh); }
+    for (const id in lootBags) { objects.push(lootBags[id].mesh); }
+
+    const intersects = raycaster.intersectObjects(objects);
 
     if (intersects.length > 0) {
         const hit = intersects[0].object;
-        for (const id in mobs) {
-            if (mobs[id].mesh === hit) {
-                currentTargetId = id;
-                updateTargetRing();
-                break;
-            }
+        if (hit.userData.type === 'mob') {
+            currentTargetId = hit.userData.id;
+            updateTargetRing();
+        } else if (hit.userData.type === 'loot') {
+            socket.emit('pickup', hit.userData.id);
         }
     } else {
         currentTargetId = null;
@@ -672,6 +781,7 @@ window.addEventListener('click', (event) => {
 
 function getLocalInput() {
     if (document.activeElement === chatInput) return { x: 0, z: 0 };
+    if (isInventoryOpen) return { x: 0, z: 0 };
     let x = 0;
     let z = 0;
     if (keys['w'] || keys['z'] || keys['ArrowUp']) z -= 1;

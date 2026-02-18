@@ -104,6 +104,34 @@
 
         <!-- Death Screen -->
         <div id="death-screen">VOUS ÊTES MORT</div>
+
+        <!-- Inventory Overlay -->
+        <div id="inventory-container" style="display: none;">
+            <h2>INVENTAIRE</h2>
+            <div id="inventory-grid">
+                <!-- 16 Slots -->
+                <div class="inv-slot" data-index="0"></div>
+                <div class="inv-slot" data-index="1"></div>
+                <div class="inv-slot" data-index="2"></div>
+                <div class="inv-slot" data-index="3"></div>
+                <div class="inv-slot" data-index="4"></div>
+                <div class="inv-slot" data-index="5"></div>
+                <div class="inv-slot" data-index="6"></div>
+                <div class="inv-slot" data-index="7"></div>
+                <div class="inv-slot" data-index="8"></div>
+                <div class="inv-slot" data-index="9"></div>
+                <div class="inv-slot" data-index="10"></div>
+                <div class="inv-slot" data-index="11"></div>
+                <div class="inv-slot" data-index="12"></div>
+                <div class="inv-slot" data-index="13"></div>
+                <div class="inv-slot" data-index="14"></div>
+                <div class="inv-slot" data-index="15"></div>
+            </div>
+            <div id="item-tooltip" style="display: none;"></div>
+            <div id="inv-close-hint">Press I to Close</div>
+        </div>
+
+        <div id="bag-button">🎒</div>
     </div>
     <script src="client.js"></script>
 </body>

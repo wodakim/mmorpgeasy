@@ -1,3 +1,5 @@
+const ItemSystem = require('./ItemSystem');
+
 class Player {
     constructor(id, data) {
         this.id = id;
@@ -13,6 +15,10 @@ class Player {
         this.level = data.level || 1;
         this.xp = data.xp || 0;
 
+        // Inventory (Array of objects: { itemId, equipped })
+        // If loaded as string (from DB), parse it.
+        this.inventory = typeof data.inventory === 'string' ? JSON.parse(data.inventory) : (data.inventory || []);
+
         // Calculate Max XP
         this.maxXp = 100;
         for (let i = 1; i < this.level; i++) {
@@ -21,8 +27,15 @@ class Player {
 
         // Stats based on Class or Loaded Data
         const stats = Player.getClassStats(this.className);
-        this.maxHp = stats.hp;
-        this.maxMana = stats.mana;
+        // Base Stats
+        this.baseMaxHp = stats.hp;
+        this.baseMaxMana = stats.mana;
+
+        // Recalculate Totals with Equipment
+        this.maxHp = this.baseMaxHp; // Init
+        this.maxMana = this.baseMaxMana; // Init
+        this.recalculateStats();
+
         this.hp = data.hp !== undefined ? data.hp : this.maxHp;
         this.mana = data.mana !== undefined ? data.mana : this.maxMana;
 
@@ -35,6 +48,36 @@ class Player {
 
         this.dead = false;
         this.respawnTimer = 0;
+    }
+
+    recalculateStats() {
+        let addedHp = 0;
+        this.inventory.forEach(item => {
+            if (item.equipped) {
+                const itemData = ItemSystem.getItem(item.itemId);
+                if (itemData && itemData.stats) {
+                    if (itemData.stats.hp) addedHp += itemData.stats.hp;
+                }
+            }
+        });
+
+        this.maxHp = this.baseMaxHp + addedHp;
+        this.maxMana = this.baseMaxMana;
+
+        if (this.hp > this.maxHp) this.hp = this.maxHp;
+    }
+
+    getDamage() {
+        let baseDmg = 10;
+        this.inventory.forEach(item => {
+            if (item.equipped) {
+                const itemData = ItemSystem.getItem(item.itemId);
+                if (itemData && itemData.stats && itemData.stats.damage) {
+                    baseDmg += itemData.stats.damage;
+                }
+            }
+        });
+        return baseDmg;
     }
 
     static getClassStats(className) {
