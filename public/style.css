@@ -1,12 +1,21 @@
-/* ... Previous Styles ... */
+:root {
+    --ui-scale: 1; /* Dynamic scaling */
+    --font-ui: 16px;
+    --color-primary: #3498db;
+    --color-danger: #e74c3c;
+    --color-success: #2ecc71;
+    --color-warning: #f1c40f;
+    --color-bg-dark: rgba(0, 0, 0, 0.85);
+}
+
 body {
     margin: 0;
     overflow: hidden;
     background-color: #000;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     user-select: none;
-    -webkit-user-select: none; /* Mobile */
-    touch-action: none; /* Prevent browser scrolling/zoom */
+    -webkit-user-select: none;
+    touch-action: none;
 }
 
 canvas {
@@ -33,13 +42,13 @@ canvas {
 }
 
 #menu-content {
-    background-color: rgba(0, 0, 0, 0.8);
-    padding: 40px;
-    border-radius: 10px;
+    background-color: var(--color-bg-dark);
+    padding: 2rem;
+    border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     text-align: center;
     color: white;
-    width: 300px;
+    width: min(90vw, 400px); /* Responsive width */
 }
 
 #menu-content h1 {
@@ -47,36 +56,40 @@ canvas {
     letter-spacing: 2px;
     color: #87CEEB;
     text-transform: uppercase;
+    font-size: 2rem;
 }
 
 #login-form, #create-char-form, #lobby-screen {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 1rem;
 }
 
 input {
-    padding: 10px;
-    border-radius: 5px;
+    padding: 0.8rem;
+    border-radius: 6px;
     border: 1px solid #555;
     background: #222;
     color: white;
     outline: none;
+    font-size: 1rem;
 }
 
 button {
-    padding: 10px 20px;
-    border-radius: 5px;
+    padding: 0.8rem 1.5rem;
+    border-radius: 6px;
     border: none;
-    background: #3498db;
+    background: var(--color-primary);
     color: white;
     cursor: pointer;
     font-weight: bold;
-    transition: background 0.2s;
+    font-size: 1rem;
+    transition: transform 0.1s, background 0.2s;
+    min-height: 44px; /* Touch target size */
 }
 
-button:hover {
-    background: #2980b9;
+button:active {
+    transform: scale(0.96);
 }
 
 .menu-buttons {
@@ -89,15 +102,17 @@ button:hover {
     display: flex;
     gap: 10px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .class-card {
     border: 2px solid transparent;
     background: rgba(255, 255, 255, 0.1);
     padding: 10px;
-    border-radius: 5px;
+    border-radius: 8px;
     cursor: pointer;
     width: 80px;
+    flex: 1 1 80px;
 }
 
 .class-card.selected {
@@ -105,13 +120,10 @@ button:hover {
     border: 2px solid white;
 }
 
-.class-card h3 { margin: 5px 0; font-size: 14px; }
-.class-card p { margin: 0; font-size: 10px; color: #ccc; }
-
 #login-msg {
-    color: #e74c3c;
-    font-size: 12px;
-    height: 15px;
+    color: var(--color-danger);
+    font-size: 0.9rem;
+    height: 20px;
 }
 
 /* --- Game UI --- */
@@ -122,21 +134,18 @@ button:hover {
     width: 100%;
     height: 100%;
     z-index: 10;
-    pointer-events: none; /* Let clicks pass through to 3D scene */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    pointer-events: none;
 }
 
-/* --- Stats Bars (Top Left) --- */
+/* Stats (Top Left) */
 #stats-container {
     position: absolute;
     top: 20px;
     left: 20px;
-    width: 250px;
+    width: min(40vw, 250px);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
 }
 
 .stat-bar-wrapper {
@@ -148,57 +157,23 @@ button:hover {
     overflow: hidden;
 }
 
-.stat-bar {
-    height: 100%;
-    width: 0%; /* Default 0 */
-    transition: width 0.2s ease-out;
-}
+.stat-bar { height: 100%; width: 0%; transition: width 0.2s ease-out; }
+#hp-bar { background-color: var(--color-danger); }
+#mana-bar { background-color: var(--color-primary); }
+#xp-bar { background-color: var(--color-warning); }
 
-#hp-bar { background-color: #e74c3c; } /* Red */
-#mana-bar { background-color: #3498db; } /* Blue */
-#xp-bar { background-color: #f1c40f; } /* Yellow/Gold */
-
-/* --- Floating Text --- */
-#floating-text-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.floating-text {
-    position: absolute;
-    color: white;
-    font-weight: bold;
-    font-size: 20px;
-    text-shadow: 2px 2px 0 #000;
-    transform: translate(-50%, -50%);
-    animation: floatUp 1s ease-out forwards;
-}
-
-.floating-text.crit {
-    color: #e74c3c;
-    font-size: 26px;
-}
-
-@keyframes floatUp {
-    0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    100% { opacity: 0; transform: translate(-50%, -150%) scale(1.5); }
-}
-
-/* --- Minimap (Top Right) --- */
+/* Minimap (Top Right) */
 #minimap-container {
     position: absolute;
     top: 20px;
     right: 20px;
-    width: 120px;
-    height: 120px;
+    width: 15vw;
+    height: 15vw;
+    max-width: 100px;
+    max-height: 100px;
     background-color: rgba(0, 0, 0, 0.4);
     border: 2px solid rgba(255, 255, 255, 0.5);
-    border-radius: 50%; /* Circle */
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -212,137 +187,17 @@ button:hover {
     box-shadow: 0 0 4px #000;
 }
 
-/* --- Action Bar (Bottom Center) --- */
-#action-bar-container {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 10px;
-    pointer-events: auto; /* Buttons are clickable */
-}
-
-.action-slot {
-    width: 40px;
-    height: 40px;
-    background-color: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 4px;
-    position: relative;
-    cursor: pointer;
-    transition: background-color 0.1s;
-    overflow: hidden; /* For cooldown overlay */
-}
-
-.action-slot:hover {
-    background-color: rgba(50, 50, 50, 0.8);
-}
-
-.action-slot:active {
-    background-color: rgba(100, 100, 100, 0.8);
-    transform: scale(0.95);
-}
-
-.key-hint {
-    position: absolute;
-    top: 2px;
-    left: 4px;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.7);
-    font-weight: bold;
-    z-index: 2;
-}
-
-.cooldown-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 0%;
-    background-color: rgba(0, 0, 0, 0.6);
-    z-index: 1;
-}
-
-/* --- Chat (Bottom Left) --- */
-#chat-container {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    width: 350px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    pointer-events: auto;
-}
-
-#chat-log {
-    height: 150px;
-    overflow-y: hidden; /* Hide scrollbar for cleaner look, messages fade out */
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    /* Basic text shadow for readability against game world */
-    text-shadow: 1px 1px 2px black;
-    color: white;
-    font-size: 14px;
-    pointer-events: none; /* Click through chat log */
-    margin-bottom: 5px;
-}
-
-.chat-message {
-    padding: 2px 5px;
-    background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-    margin-top: 2px;
-    animation: fadein 0.2s;
-    /* Word wrap */
-    word-wrap: break-word;
-}
-
-.chat-message.fade-out {
-    opacity: 0;
-    transition: opacity 1s ease-out;
-}
-
-#chat-input {
-    width: 100%;
-    padding: 8px;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    outline: none;
-    font-size: 14px;
-    transition: background-color 0.2s;
-    /* Make input slightly transparent until focused */
-    opacity: 0.6;
-}
-
-#chat-input:focus {
-    background-color: rgba(0, 0, 0, 0.8);
-    border-color: rgba(255, 255, 255, 0.6);
-    opacity: 1;
-}
-
-@keyframes fadein {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- Phase 5: Mobile Controls & Death Screen --- */
-
+/* --- Mobile Controls --- */
 #joystick-container {
     position: absolute;
     bottom: 40px;
     left: 40px;
     width: 120px;
     height: 120px;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     pointer-events: auto;
-    /* Hide on Desktop? For now show always for testing */
 }
 
 #joystick-knob {
@@ -353,8 +208,7 @@ button:hover {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%); /* Centered initially */
-    /* Position updated via JS */
+    transform: translate(-50%, -50%);
 }
 
 #action-button {
@@ -363,7 +217,7 @@ button:hover {
     right: 40px;
     width: 80px;
     height: 80px;
-    background-color: rgba(231, 76, 60, 0.6); /* Reddish */
+    background-color: rgba(231, 76, 60, 0.6);
     border: 3px solid rgba(255, 255, 255, 0.5);
     border-radius: 50%;
     color: white;
@@ -373,12 +227,6 @@ button:hover {
     justify-content: center;
     pointer-events: auto;
     cursor: pointer;
-    user-select: none;
-}
-
-#action-button:active {
-    background-color: rgba(231, 76, 60, 0.9);
-    transform: scale(0.95);
 }
 
 #skill-button {
@@ -387,7 +235,7 @@ button:hover {
     right: 140px;
     width: 60px;
     height: 60px;
-    background-color: rgba(52, 152, 219, 0.6); /* Blueish */
+    background-color: rgba(52, 152, 219, 0.6);
     border: 3px solid rgba(255, 255, 255, 0.5);
     border-radius: 50%;
     color: white;
@@ -397,123 +245,14 @@ button:hover {
     justify-content: center;
     pointer-events: auto;
     cursor: pointer;
-    user-select: none;
-}
-
-#skill-button:active {
-    background-color: rgba(52, 152, 219, 0.9);
-    transform: scale(0.95);
-}
-
-#death-screen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    color: #e74c3c; /* Red */
-    font-size: 48px;
-    font-weight: bold;
-    display: flex; /* Flex but hidden initially via JS? Or display none in CSS */
-    display: none;
-    align-items: center;
-    justify-content: center;
-    text-transform: uppercase;
-    text-shadow: 0 0 10px #000;
-    z-index: 20;
-    pointer-events: auto; /* Block clicks to game */
-}
-
-/* --- Inventory Overlay --- */
-#inventory-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 320px;
-    background-color: rgba(30, 30, 30, 0.95);
-    border: 2px solid #555;
-    border-radius: 8px;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    z-index: 50;
-    pointer-events: auto;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-}
-
-#inventory-container h2 {
-    color: #ccc;
-    margin: 5px 0 15px 0;
-    font-size: 18px;
-    letter-spacing: 1px;
-}
-
-#inventory-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.inv-slot {
-    width: 60px;
-    height: 60px;
-    background-color: rgba(0, 0, 0, 0.5);
-    border: 1px solid #444;
-    border-radius: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px; /* Icon size */
-    position: relative;
-    transition: background-color 0.1s;
-}
-
-.inv-slot:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: #666;
-}
-
-.inv-slot.equipped {
-    border: 2px solid #f1c40f; /* Gold border */
-    box-shadow: 0 0 5px #f1c40f;
-}
-
-.inv-item-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
-}
-
-#item-tooltip {
-    position: absolute;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 5px 10px;
-    border: 1px solid #777;
-    border-radius: 4px;
-    font-size: 12px;
-    pointer-events: none;
-    z-index: 60;
-    white-space: nowrap;
-}
-
-#inv-close-hint {
-    color: #777;
-    font-size: 10px;
-    margin-top: 5px;
 }
 
 #bag-button {
     position: absolute;
     top: 20px;
-    right: 160px; /* Left of minimap */
-    width: 40px;
-    height: 40px;
+    right: max(120px, 18vw); /* Responsive positioning */
+    width: 44px;
+    height: 44px;
     background-color: rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
@@ -526,126 +265,198 @@ button:hover {
     z-index: 40;
 }
 
-#bag-button:active {
-    transform: scale(0.9);
+/* --- Contextual Action Button --- */
+#context-action-btn {
+    position: absolute;
+    bottom: 180px; /* Above joystick */
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 60px;
+    height: 60px;
+    background-color: var(--color-warning); /* Gold/Action color */
+    border: 3px solid white;
+    border-radius: 30px;
+    color: #333;
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    cursor: pointer;
+    padding: 0 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 90;
 }
 
-/* --- Phase 9: Shop & Quest --- */
+#context-action-btn:active {
+    transform: translateX(-50%) scale(0.95);
+}
 
-/* Shop Overlay */
-#shop-container {
+@keyframes popIn {
+    from { transform: translateX(-50%) scale(0); opacity: 0; }
+    to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+/* --- Feedback Overlay --- */
+#feedback-overlay {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-danger);
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+}
+
+.feedback-show {
+    opacity: 1 !important;
+    animation: fadeOutFeedback 1.5s forwards;
+}
+
+@keyframes fadeOutFeedback {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(1.2); }
+}
+
+/* --- Responsive Modals --- */
+.modal-base {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 400px;
-    background-color: rgba(20, 20, 25, 0.95);
-    border: 2px solid #e67e22; /* Orange border for shop */
-    border-radius: 8px;
+    background-color: var(--color-bg-dark);
+    border-radius: 12px;
     padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    z-index: 55;
     pointer-events: auto;
     color: white;
-}
-
-#shop-list {
-    width: 100%;
-    margin-bottom: 20px;
-    max-height: 300px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    z-index: 60;
+    /* Responsive sizing */
+    width: 90vw;
+    max-width: 500px;
+    max-height: 80vh;
     overflow-y: auto;
 }
 
-.shop-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid #444;
-}
-
-.shop-item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-.shop-item button {
-    padding: 5px 10px;
-    font-size: 12px;
-}
-
-/* Quest Dialog */
-#quest-dialog {
+#inventory-container {
+    /* Extending .modal-base logic */
+    /* Can't use extend in pure CSS, repeating props */
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 400px;
-    background-color: rgba(25, 20, 30, 0.95);
-    border: 2px solid #9b59b6; /* Purple for quests */
-    border-radius: 8px;
-    padding: 20px;
+    background-color: var(--color-bg-dark);
+    border-radius: 12px;
+    padding: 1rem;
+    pointer-events: auto;
+    color: white;
+    width: 90vw;
+    max-width: 400px;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    z-index: 55;
+    border: 2px solid #555;
+}
+
+#inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.inv-slot {
+    aspect-ratio: 1;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid #444;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative; /* For icon */
+}
+.inv-slot:active { background-color: rgba(255,255,255,0.2); }
+
+#shop-container, #quest-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--color-bg-dark);
+    border-radius: 12px;
+    padding: 1rem;
     pointer-events: auto;
     color: white;
-    text-align: center;
+    width: 90vw;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    border: 2px solid var(--color-warning); /* Shop Default */
 }
 
-.quest-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
+#quest-dialog { border-color: #9b59b6; } /* Quest color */
+
+/* Close Buttons */
+.close-btn {
+    background: #e74c3c;
+    margin-top: auto;
+    width: 100%;
+    padding: 12px;
 }
 
-/* Quest Tracker */
-#quest-tracker {
+/* Chat Responsive */
+#chat-container {
     position: absolute;
-    top: 100px;
-    right: 20px;
-    width: 200px;
-    background-color: rgba(0, 0, 0, 0.5);
-    padding: 10px;
-    border-radius: 5px;
-    color: white;
-    pointer-events: none;
+    bottom: 20px;
+    left: 20px;
+    width: clamp(250px, 40vw, 400px);
+    pointer-events: auto;
 }
 
-#quest-tracker h3 {
-    margin: 0 0 10px 0;
-    font-size: 14px;
-    color: #f1c40f;
-}
-
-.tracker-entry {
-    font-size: 12px;
-    margin-bottom: 5px;
-}
-
-.npc-label {
-    position: absolute;
-    background-color: rgba(0, 0, 0, 0.6);
-    color: #ffd700;
-    padding: 2px 5px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
-    pointer-events: none;
-    transform: translate(-50%, -100%);
-    text-shadow: 1px 1px 2px black;
-    white-space: nowrap;
-    z-index: 5;
-}
-
-/* Responsive Tweaks */
 @media (max-width: 600px) {
-    #stats-container { width: 180px; }
-    #chat-container { width: 250px; bottom: 180px; /* Above joystick */ }
-    #minimap-container { width: 80px; height: 80px; }
-    #action-bar-container { display: none; /* Hide keyboard action bar on mobile if redundant */ }
-    #bag-button { right: 110px; } /* Adjust pos */
-    #shop-container, #quest-dialog { width: 90%; }
+    #chat-container {
+        bottom: 160px; /* Above joystick */
+        width: 60vw;
+        max-width: 300px;
+    }
+    #action-bar-container { display: none; } /* Hide keyboard bar on mobile */
+
+    /* Ensure modals are nearly full screen on small phones */
+    #inventory-container, #shop-container, #quest-dialog {
+        width: 95vw;
+        max-height: 85vh;
+    }
+}
+
+/* Floating Text */
+#floating-text-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+}
+.floating-text {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    font-size: 20px;
+    text-shadow: 2px 2px 0 #000;
+    transform: translate(-50%, -50%);
+    animation: floatUp 1s ease-out forwards;
+}
+@keyframes floatUp {
+    0% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -150%); }
 }
