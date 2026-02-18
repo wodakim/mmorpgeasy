@@ -1,0 +1,91 @@
+
+> app@1.0.0 start
+> node server.js
+
+Game loop started at 20 ticks/sec
+Server is running on port 3000
+Connected to SQLite database
+A user connected: YYwl07JWOIG3iqv0AAAB
+[DEBUG] Received createCharacter for user 1: Name=Conan, Class=Guerrier, Color=#ffffff
+[DEBUG] Character created successfully: Conan
+Player YYwl07JWOIG3iqv0AAAB added (Level 1 Guerrier)
+User disconnected: YYwl07JWOIG3iqv0AAAB
+Player YYwl07JWOIG3iqv0AAAB removed
+Saved data for Conan
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+A user connected: RpOh3GtP_d8DwZ5gAAAD
+User disconnected: RpOh3GtP_d8DwZ5gAAAD
+Saved Game State
+Saved Game State
+Saved Game State
+A user connected: udHJbC2skCbgTPiCAAAF
+User disconnected: udHJbC2skCbgTPiCAAAF
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+A user connected: GqsEwUob82YQ0t1IAAAH
+[DEBUG] Received createCharacter for user 2: Name=VerifierHero, Class=Guerrier, Color=#ffffff
+[DEBUG] Character created successfully: VerifierHero
+Player GqsEwUob82YQ0t1IAAAH added (Level 1 Guerrier)
+User disconnected: GqsEwUob82YQ0t1IAAAH
+Player GqsEwUob82YQ0t1IAAAH removed
+Saved data for VerifierHero
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State
+Saved Game State

@@ -13,11 +13,180 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// Lighting
-const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.8);
+// --- AUDIO MANAGER ---
+class AudioManager {
+    constructor() {
+        this.ctx = null;
+        this.initialized = false;
+        // Bind init to first interaction
+        const initAudio = () => {
+            if (!this.initialized) {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.initialized = true;
+                console.log("Audio Context Initialized");
+                // Remove listeners
+                document.removeEventListener('click', initAudio);
+                document.removeEventListener('keydown', initAudio);
+                document.removeEventListener('touchstart', initAudio);
+            } else if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        };
+        document.addEventListener('click', initAudio);
+        document.addEventListener('keydown', initAudio);
+        document.addEventListener('touchstart', initAudio);
+    }
+
+    playTone(freq, type, duration, vol = 0.1) {
+        if (!this.initialized || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playAttack() {
+        // Swoosh: fast slide
+        if (!this.initialized || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+    }
+
+    playHit() {
+        // Thud/Crunch: low noise/square
+        this.playTone(100, 'square', 0.1, 0.2);
+    }
+
+    playLevelUp() {
+        // Ascending arpeggio
+        if (!this.initialized) return;
+        const now = this.ctx.currentTime;
+        [440, 554, 659, 880].forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.1, now + i*0.1);
+            gain.gain.linearRampToValueAtTime(0, now + i*0.1 + 0.2);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i*0.1);
+            osc.stop(now + i*0.1 + 0.2);
+        });
+    }
+
+    playCoin() {
+        // Ping
+        this.playTone(1200, 'sine', 0.1, 0.1);
+        setTimeout(() => this.playTone(1800, 'sine', 0.2, 0.1), 50);
+    }
+}
+const audioManager = new AudioManager();
+window.audioManager = audioManager;
+
+// --- PARTICLE SYSTEM ---
+class ParticleSystem {
+    constructor(scene) {
+        this.scene = scene;
+        this.particles = [];
+    }
+
+    createHitEffect(x, z) {
+        // Exploding red cubes
+        for(let i=0; i<8; i++) {
+            const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, 0.5, z);
+            // Random velocity
+            const vel = new THREE.Vector3(
+                (Math.random()-0.5)*4,
+                Math.random()*4,
+                (Math.random()-0.5)*4
+            );
+            this.scene.add(mesh);
+            this.particles.push({ mesh, vel, life: 1.0 });
+        }
+    }
+
+    createLevelUpEffect(x, z) {
+        // Rising golden pillar particles
+        for(let i=0; i<20; i++) {
+            const geo = new THREE.PlaneGeometry(0.1, 0.1);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xFFD700, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x + (Math.random()-0.5), 0, z + (Math.random()-0.5));
+            const vel = new THREE.Vector3(0, 1 + Math.random(), 0);
+            this.scene.add(mesh);
+            this.particles.push({ mesh, vel, life: 2.0, type: 'rise' });
+        }
+    }
+
+    createWalkDust(x, z) {
+        // Small puff
+        const geo = new THREE.PlaneGeometry(0.15, 0.15);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.5 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.x = -Math.PI/2;
+        mesh.position.set(x, 0.05, z);
+        this.scene.add(mesh);
+        this.particles.push({ mesh, vel: new THREE.Vector3(0,0,0), life: 0.5, type: 'fade' });
+    }
+
+    update(delta) {
+        for(let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.life -= delta;
+
+            if(p.type === 'rise') {
+                p.mesh.position.addScaledVector(p.vel, delta);
+                p.mesh.rotation.y += delta;
+            } else if(p.type === 'fade') {
+                 p.mesh.scale.multiplyScalar(1.0 + delta);
+                 p.mesh.material.opacity = p.life * 2;
+            } else {
+                // Physics particle
+                p.vel.y -= 9.8 * delta; // Gravity
+                p.mesh.position.addScaledVector(p.vel, delta);
+                p.mesh.rotation.x += delta * 5;
+                if(p.mesh.position.y < 0) {
+                     p.mesh.position.y = 0;
+                     p.vel.y *= -0.5; // Bounce
+                     p.vel.x *= 0.8;
+                     p.vel.z *= 0.8;
+                }
+            }
+
+            if(p.life <= 0) {
+                this.scene.remove(p.mesh);
+                if(p.mesh.geometry) p.mesh.geometry.dispose();
+                if(p.mesh.material) p.mesh.material.dispose();
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+}
+const particleSystem = new ParticleSystem(scene);
+window.particleSystem = particleSystem;
+
+// --- LIGHTING & DAY/NIGHT ---
+const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.6); // Lowered base intensity
 scene.add(hemiLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(10, 20, 10);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.width = 2048;
@@ -43,6 +212,7 @@ const players = {};
 const mobs = {};
 const projectiles = {};
 const lootBags = {};
+const npcs = {}; // { id: { mesh, label } }
 let myId = null;
 let myUserId = null;
 let myUsername = null;
@@ -91,6 +261,7 @@ let selectedColor = '#ffffff';
 
 // Inventory State
 let isInventoryOpen = false;
+let myGold = 0; // Added missing var
 
 // Cooldown State
 const cooldowns = {
@@ -100,9 +271,9 @@ const cooldowns = {
 
 // Item Definitions
 const ITEM_DEFS = {
-    'rusty_sword': { name: 'Épée Rouillée', color: '#7f8c8d' },
-    'leather_tunic': { name: 'Tunique en Cuir', color: '#d35400' },
-    'health_potion': { name: 'Potion de Soin', color: '#e74c3c' }
+    'rusty_sword': { name: 'Épée Rouillée', color: '#7f8c8d', stats: 'Dégâts: +5' },
+    'leather_tunic': { name: 'Tunique en Cuir', color: '#d35400', stats: 'Armure: +5' },
+    'health_potion': { name: 'Potion de Soin', color: '#e74c3c', stats: 'Soin: +20' }
 };
 
 // --- MENU LOGIC ---
@@ -111,7 +282,10 @@ const ITEM_DEFS = {
 document.getElementById('btn-login').addEventListener('click', () => {
     const user = document.getElementById('username').value;
     const pass = document.getElementById('password').value;
-    if (user && pass) socket.emit('login', { username: user, password: pass });
+    if (user && pass) {
+        socket.emit('login', { username: user, password: pass });
+        audioManager.playTone(400, 'sine', 0.1); // Feedback
+    }
 });
 
 document.getElementById('btn-register').addEventListener('click', () => {
@@ -147,13 +321,10 @@ classCards.forEach(card => {
 });
 
 document.getElementById('btn-create').addEventListener('click', () => {
-    console.log('Bouton cliqué !'); // Debug Log
     const name = document.getElementById('char-name').value;
     selectedColor = document.getElementById('char-color').value;
     if (name) {
-        // Send as Hex String
         const data = { userId: myUserId, name: name, className: selectedClass, color: selectedColor };
-        console.log('Données envoyées:', data); // Debug Log
         socket.emit('createCharacter', data);
     } else {
         alert("Please enter a character name.");
@@ -161,12 +332,10 @@ document.getElementById('btn-create').addEventListener('click', () => {
 });
 
 socket.on('createCharacterError', (msg) => {
-    console.error('Character Creation Error:', msg);
     alert('Error: ' + msg);
 });
 
 socket.on('createCharacterSuccess', () => {
-    console.log('Character Creation Success!');
     createCharForm.style.display = 'none';
     lobbyScreen.style.display = 'flex';
     document.getElementById('welcome-text').textContent = `Ready to play, ${myUsername}`;
@@ -183,7 +352,6 @@ socket.on('enterWorldSuccess', (data) => {
     gameStarted = true;
     myId = data.id;
     myClass = data.className;
-    console.log('Entered world as', myId, myClass);
 
     // Setup camera for game
     camera.rotation.set(0,0,0);
@@ -202,7 +370,7 @@ let targetRing = null;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-// Functions (Mob Mesh, Player Mesh, Floating Text, World Gen) - Kept from Phase 5 but refactored slightly
+// Functions (Mob Mesh, Player Mesh, Floating Text, World Gen)
 
 function createMobMesh() {
     const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
@@ -212,6 +380,17 @@ function createMobMesh() {
     mesh.receiveShadow = true;
     mesh.position.y = 0.4;
     return mesh;
+}
+
+function flashMob(mobId) {
+    if (mobs[mobId] && mobs[mobId].mesh) {
+        const mesh = mobs[mobId].mesh;
+        const originalColor = mesh.material.color.getHex();
+        mesh.material.emissive.setHex(0xFFFFFF);
+        setTimeout(() => {
+            if (mesh && mesh.material) mesh.material.emissive.setHex(0x000000);
+        }, 100);
+    }
 }
 
 function updateTargetRing() {
@@ -310,13 +489,11 @@ socket.on('world', (blocks) => {
 
 // State Sync
 socket.on('state', (state) => {
-    // Phase 6: We might receive state updates even if not "in game" yet (for background visuals)
-    // But typically we care about rendering other players.
-
     const serverPlayers = state.players || {};
     const serverMobs = state.mobs || {};
     const serverProjectiles = state.projectiles || [];
     const serverLoot = state.loot || {};
+    const serverNPCs = state.npcs || {};
 
     // Players
     for (const id in serverPlayers) {
@@ -333,6 +510,11 @@ socket.on('state', (state) => {
                     myInventory = p.inventory;
                     if (isInventoryOpen) renderInventory();
                 }
+            }
+            // Sync Gold if available
+            if (p.gold !== undefined) {
+                 if (p.gold > myGold) audioManager.playCoin();
+                 myGold = p.gold;
             }
         }
 
@@ -413,16 +595,9 @@ socket.on('state', (state) => {
                 );
             } else if (p.name === 'Piercing Arrow') {
                 mesh = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), // Thin cylinder
+                    new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8),
                     new THREE.MeshBasicMaterial({ color: p.color })
                 );
-                // Rotate to match direction
-                mesh.rotation.x = Math.PI / 2; // Flat
-                mesh.rotation.z = Math.atan2(p.vx, p.vz); // Heading? No, Cylinder default is Y-up.
-                // We need to orient cylinder along velocity vector.
-                // If geometry is vertical (Y-up), we rotate X to make it Z-forward, then rotate Y for direction?
-                // Simpler: Just LookAt target.
-                // Reset rotation
                 mesh.rotation.set(Math.PI/2, 0, 0);
             } else {
                  mesh = new THREE.Mesh(
@@ -435,7 +610,7 @@ socket.on('state', (state) => {
 
             if (p.name === 'Piercing Arrow') {
                  mesh.lookAt(p.x + p.vx, 0.5, p.z + p.vz);
-                 mesh.rotateX(Math.PI / 2); // Adjust if necessary based on geometry
+                 mesh.rotateX(Math.PI / 2);
             }
 
             scene.add(mesh);
@@ -444,7 +619,6 @@ socket.on('state', (state) => {
             // Update
             const mesh = projectiles[p.id];
             mesh.position.lerp(new THREE.Vector3(p.x, 0.5, p.z), 0.3);
-            // Update orientation if needed? Velocity is constant so orientation shouldn't change much.
         }
     }
     // Remove old projectiles
@@ -483,10 +657,66 @@ socket.on('state', (state) => {
              }
         }
     }
+
+    // NPCs
+    for (const id in serverNPCs) {
+        const n = serverNPCs[id];
+        if (!npcs[id]) {
+            let geometry, color;
+            if (n.type === 'Merchant') {
+                geometry = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 8);
+                color = 0xF1C40F; // Yellow
+            } else {
+                geometry = new THREE.BoxGeometry(0.8, 1.5, 0.8);
+                color = 0xFFFFFF; // White
+            }
+            const material = new THREE.MeshLambertMaterial({ color: color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(n.x, 0.75, n.z);
+            mesh.castShadow = true;
+            mesh.userData = { id: id, type: 'npc' };
+            scene.add(mesh);
+
+            const label = document.createElement('div');
+            label.className = 'npc-label';
+            label.textContent = `${n.name} (Appuyez sur F)`;
+            floatingTextContainer.appendChild(label);
+
+            npcs[id] = { mesh: mesh, label: label, x: n.x, z: n.z };
+        } else {
+            const pos = npcs[id].mesh.position.clone();
+            pos.y += 1.5;
+            pos.project(camera);
+            const x = (pos.x * .5 + .5) * window.innerWidth;
+            const y = (-(pos.y * .5) + .5) * window.innerHeight;
+
+            const label = npcs[id].label;
+            label.style.left = `${x}px`;
+            label.style.top = `${y}px`;
+
+            if (pos.z > 1) {
+                label.style.display = 'none';
+            } else {
+                label.style.display = 'block';
+            }
+        }
+    }
 });
 
 socket.on('damage', (data) => {
-    if (gameStarted) createFloatingText(`-${data.amount}`, data.x, data.z);
+    if (gameStarted) {
+        createFloatingText(`-${data.amount}`, data.x, data.z);
+        // Effects
+        particleSystem.createHitEffect(data.x, data.z);
+        audioManager.playHit();
+        // If mob, flash it
+        for (const id in mobs) {
+             const m = mobs[id];
+             if (Math.abs(m.mesh.position.x - data.x) < 0.5 && Math.abs(m.mesh.position.z - data.z) < 0.5) {
+                 flashMob(id);
+             }
+        }
+    }
 });
 
 socket.on('effects', (events) => {
@@ -500,7 +730,8 @@ socket.on('effects', (events) => {
             } else if (event.name === 'explosion') {
                 createExplosionEffect(event.x, event.z);
             } else if (event.name === 'hit') {
-                // Small hit puff?
+                particleSystem.createHitEffect(event.x, event.z);
+                audioManager.playHit();
             }
         } else if (event.type === 'damage_text') {
              createFloatingText(`-${event.amount}`, event.x, event.z);
@@ -562,6 +793,18 @@ socket.on('chatMessage', (data) => {
     msgDiv.className = 'chat-message';
     msgDiv.textContent = `${data.id.substring(0, 5)}: ${data.text}`;
     chatLog.appendChild(msgDiv);
+
+    // System checks
+    if (data.id === 'System') {
+        if (data.text.includes('Level Up')) {
+            audioManager.playLevelUp();
+            if (players[myId]) {
+                const pos = players[myId].mesh.position;
+                particleSystem.createLevelUpEffect(pos.x, pos.z);
+            }
+        }
+    }
+
     setTimeout(() => {
         msgDiv.classList.add('fade-out');
         setTimeout(() => { if (msgDiv.parentNode) msgDiv.parentNode.removeChild(msgDiv); }, 1000);
@@ -625,12 +868,17 @@ window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) keys[e.key] = true;
 
     // Desktop Combat
-    if (e.key === '1' && currentTargetId) socket.emit('attack', currentTargetId);
+    if (e.key === '1') {
+        if (currentTargetId) {
+             socket.emit('attack', currentTargetId);
+             audioManager.playAttack();
+        }
+    }
 
     // Skill 2
     if (e.key === '2') {
         const cd = (myClass === 'Mage') ? 3000 : (myClass === 'Ranger') ? 5000 : 4000;
-        if (Date.now() < cooldowns['2']) return; // Strict check
+        if (Date.now() < cooldowns['2']) return;
 
         const input = getLocalInput();
         let dx = 0, dz = 0;
@@ -640,6 +888,7 @@ window.addEventListener('keydown', (e) => {
              dz = Math.cos(rot);
         }
         socket.emit('skill', { dx, dz });
+        audioManager.playTone(300, 'sawtooth', 0.3); // Skill SFX
 
         // Trigger Cooldown
         cooldowns['2'] = Date.now() + cd;
@@ -678,6 +927,7 @@ actionButton.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (gameStarted && currentTargetId) {
         socket.emit('attack', currentTargetId);
+        audioManager.playAttack();
         actionButton.style.transform = "scale(0.9)";
     }
 }, { passive: false });
@@ -697,6 +947,7 @@ skillButton.addEventListener('touchstart', (e) => {
              dz = Math.cos(rot);
         }
         socket.emit('skill', { dx, dz });
+        audioManager.playTone(300, 'sawtooth', 0.3);
 
         cooldowns['2'] = Date.now() + cd;
         triggerCooldown('2', cd);
@@ -709,7 +960,6 @@ function triggerCooldown(slot, durationMs) {
     if (overlay) {
         overlay.style.transition = 'none';
         overlay.style.height = '100%';
-        // Force reflow
         void overlay.offsetWidth;
         overlay.style.transition = `height ${durationMs}ms linear`;
         overlay.style.height = '0%';
@@ -729,18 +979,31 @@ function renderInventory() {
     const slots = grid.querySelectorAll('.inv-slot');
     const tooltip = document.getElementById('item-tooltip');
 
+    // Add Gold Display (if missing)
+    if (!document.getElementById('gold-display')) {
+        const goldDisplay = document.createElement('div');
+        goldDisplay.id = 'gold-display';
+        goldDisplay.style.color = '#f1c40f';
+        goldDisplay.style.marginBottom = '5px';
+        goldDisplay.textContent = `Gold: ${myGold}`;
+        inventoryContainer.insertBefore(goldDisplay, grid);
+    } else {
+        document.getElementById('gold-display').textContent = `Gold: ${myGold}`;
+    }
+
     slots.forEach(slot => {
         slot.innerHTML = '';
         slot.classList.remove('equipped');
         slot.onclick = null;
-        slot.onmouseover = null;
-        slot.onmouseout = null;
+        slot.onmouseenter = null;
+        slot.onmouseleave = null;
+        slot.onmousemove = null;
     });
 
     myInventory.forEach((item, index) => {
         if (index >= 16) return;
         const slot = slots[index];
-        const def = ITEM_DEFS[item.itemId] || { name: item.itemId, color: '#ccc' };
+        const def = ITEM_DEFS[item.itemId] || { name: item.itemId, color: '#ccc', stats: '' };
 
         const icon = document.createElement('div');
         icon.className = 'inv-item-icon';
@@ -750,20 +1013,30 @@ function renderInventory() {
         if (item.equipped) slot.classList.add('equipped');
 
         slot.onclick = () => socket.emit('useItem', index);
-        slot.onmouseover = (e) => {
+
+        slot.onmouseenter = () => {
             tooltip.style.display = 'block';
-            tooltip.textContent = def.name + (item.equipped ? ' (Equipped)' : '');
-            tooltip.style.left = (e.clientX + 15) + 'px';
-            tooltip.style.top = (e.clientY + 15) + 'px';
+            tooltip.innerHTML = `<strong>${def.name}</strong>${item.equipped ? ' (Equipped)' : ''}<br><span style='color:yellow'>${def.stats || ''}</span>`;
         };
-        slot.onmouseout = () => { tooltip.style.display = 'none'; };
+
+        slot.onmousemove = (e) => {
+            tooltip.style.left = (e.pageX + 15) + 'px';
+            tooltip.style.top = (e.pageY + 15) + 'px';
+        };
+
+        slot.onmouseleave = () => { tooltip.style.display = 'none'; };
     });
 }
 
-// Targeting & Loot Click
+// Targeting & Click
 window.addEventListener('click', (event) => {
     if (!gameStarted) return;
-    if (event.target.closest('#ui-layer') || event.target.closest('#joystick-container') || event.target.closest('#action-button') || event.target.closest('#inventory-container') || event.target.closest('#bag-button')) return;
+
+    if (isInventoryOpen && !event.target.closest('#inventory-container') && !event.target.closest('#bag-button')) toggleInventory();
+    if (isShopOpen && !event.target.closest('#shop-container')) { isShopOpen = false; document.getElementById('shop-container').style.display = 'none'; }
+    if (isQuestOpen && !event.target.closest('#quest-dialog')) { isQuestOpen = false; document.getElementById('quest-dialog').style.display = 'none'; }
+
+    if (event.target.closest('#ui-layer') || event.target.closest('#joystick-container') || event.target.closest('#action-button') || event.target.closest('#inventory-container') || event.target.closest('#shop-container') || event.target.closest('#quest-dialog') || event.target.closest('#bag-button')) return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -772,8 +1045,11 @@ window.addEventListener('click', (event) => {
     const objects = [];
     for (const id in mobs) { if (mobs[id].mesh && !mobs[id].dead) objects.push(mobs[id].mesh); }
     for (const id in lootBags) { objects.push(lootBags[id].mesh); }
+    for (const id in npcs) { objects.push(npcs[id].mesh); }
 
     const intersects = raycaster.intersectObjects(objects);
+
+    nearbyNpcId = null;
 
     if (intersects.length > 0) {
         const hit = intersects[0].object;
@@ -782,6 +1058,9 @@ window.addEventListener('click', (event) => {
             updateTargetRing();
         } else if (hit.userData.type === 'loot') {
             socket.emit('pickup', hit.userData.id);
+        } else if (hit.userData.type === 'npc') {
+            nearbyNpcId = hit.userData.id;
+            socket.emit('interact', nearbyNpcId);
         }
     } else {
         currentTargetId = null;
@@ -809,7 +1088,6 @@ function animate() {
     const delta = clock.getDelta();
 
     if (!gameStarted) {
-        // Menu Mode: Auto Rotate Camera
         const speed = 0.5;
         const radius = 15;
         const time = Date.now() * 0.0005;
@@ -818,8 +1096,27 @@ function animate() {
         camera.position.y = 8;
         camera.lookAt(0, 0, 0);
     } else {
+        // Particles
+        particleSystem.update(delta);
+
+        // Day/Night Cycle
+        const time = Date.now() * 0.0001;
+        const lx = Math.sin(time) * 20;
+        const ly = Math.abs(Math.cos(time)) * 20 + 5;
+        const lz = Math.cos(time) * 20;
+        dirLight.position.set(lx, ly, lz);
+        dirLight.intensity = Math.max(0.2, ly / 25);
+
+        // Walk Dust
+        if (myId && players[myId]) {
+             const input = getLocalInput();
+             if ((input.x !== 0 || input.z !== 0) && Math.random() < 0.1) {
+                 const pos = players[myId].mesh.position;
+                 particleSystem.createWalkDust(pos.x, pos.z);
+             }
+        }
+
         // Game Mode
-        // 1. Client-side Prediction for ME
         if (myId && players[myId]) {
             const input = getLocalInput();
             if ((input.x !== 0 || input.z !== 0) && !isDead) {
@@ -834,7 +1131,6 @@ function animate() {
                 const targetRotation = Math.atan2(dx, dz);
                 myMesh.rotation.y = targetRotation;
             }
-            // Camera Follow
             const myMesh = players[myId].mesh;
             const cameraOffset = new THREE.Vector3(0, 5, 8);
             const targetCamPos = myMesh.position.clone().add(cameraOffset);
@@ -844,7 +1140,6 @@ function animate() {
         if (currentTargetId) updateTargetRing();
     }
 
-    // 2. Interpolate OTHER players
     for (const id in players) {
         if (id === myId) continue;
         const player = players[id];

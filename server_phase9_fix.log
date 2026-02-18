@@ -1,0 +1,37 @@
+
+> app@1.0.0 start
+> node server.js
+
+Game loop started at 20 ticks/sec
+Server is running on port 3000
+Connected to SQLite database
+Saved Game State
+A user connected: evQJKf0uZ-zB1MeOAAAB
+[DEBUG] Received createCharacter for user 3: Name=Conan, Class=Guerrier, Color=#ffffff
+SQL Error during createCharacter: Error: SQLITE_CONSTRAINT: UNIQUE constraint failed: characters.name
+--> in Statement#run([
+  3,          'Conan',
+  'Guerrier', '#ffffff',
+  1,          0,
+  150,        150,
+  30,         30,
+  0,          0,
+  '[]'
+], [Function (anonymous)])
+    at Database.<anonymous> (/app/node_modules/sqlite3/lib/sqlite3.js:76:19)
+    at Database.<anonymous> (/app/node_modules/sqlite3/lib/sqlite3.js:20:19)
+    at /app/src/Database.js:103:16
+    at new Promise (<anonymous>)
+    at Database.createCharacter (/app/src/Database.js:96:16)
+    at Socket.<anonymous> (/app/server.js:81:35)
+    at Socket.emit (node:events:519:28)
+    at Socket.emitUntyped (/app/node_modules/socket.io/dist/typed-events.js:69:22) {
+  errno: 19,
+  code: 'SQLITE_CONSTRAINT',
+  __augmented: true
+}
+[DEBUG] Character creation failed: Character name already taken
+User disconnected: evQJKf0uZ-zB1MeOAAAB
+Saved Game State
+Saved Game State
+Terminated
