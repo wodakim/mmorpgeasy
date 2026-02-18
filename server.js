@@ -65,6 +65,7 @@ io.on('connection', (socket) => {
 
     // 3. Create Character
     socket.on('createCharacter', async ({ userId, name, className, color }) => {
+        console.log(`[DEBUG] Received createCharacter for user ${userId}: Name=${name}, Class=${className}`);
         try {
             // Validate inputs?
             const stats = Player.getClassStats(className);
@@ -72,11 +73,14 @@ io.on('connection', (socket) => {
 
             const char = await db.createCharacter(userId, data);
             if (char.error) {
+                console.warn(`[DEBUG] Character creation failed: ${char.error}`);
                 socket.emit('createCharacterError', char.error);
             } else {
+                console.log(`[DEBUG] Character created successfully: ${name}`);
                 socket.emit('createCharacterSuccess');
             }
         } catch (e) {
+            console.error('[DEBUG] Server Error during createCharacter:', e);
             socket.emit('createCharacterError', 'Server error');
         }
     });

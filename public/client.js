@@ -147,16 +147,27 @@ classCards.forEach(card => {
 });
 
 document.getElementById('btn-create').addEventListener('click', () => {
+    console.log('Bouton cliqué !'); // Debug Log
     const name = document.getElementById('char-name').value;
     selectedColor = document.getElementById('char-color').value;
     if (name) {
         // Convert hex to int
         const colorInt = parseInt(selectedColor.replace('#', '0x'), 16);
-        socket.emit('createCharacter', { userId: myUserId, name: name, className: selectedClass, color: colorInt });
+        const data = { userId: myUserId, name: name, className: selectedClass, color: colorInt };
+        console.log('Données envoyées:', data); // Debug Log
+        socket.emit('createCharacter', data);
+    } else {
+        alert("Please enter a character name.");
     }
 });
 
+socket.on('createCharacterError', (msg) => {
+    console.error('Character Creation Error:', msg);
+    alert('Error: ' + msg);
+});
+
 socket.on('createCharacterSuccess', () => {
+    console.log('Character Creation Success!');
     createCharForm.style.display = 'none';
     lobbyScreen.style.display = 'flex';
     document.getElementById('welcome-text').textContent = `Ready to play, ${myUsername}`;
